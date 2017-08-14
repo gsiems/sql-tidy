@@ -1,5 +1,7 @@
 git_ignore/
 
+t/failed/*.sql
+
 !Build/
 .last_cover_stats
 /META.yml
