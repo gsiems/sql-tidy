@@ -53,6 +53,8 @@ sub new {
         }
     }
 
+    $self->{tokenizer} = SQL::Tidy::Tokenize->new($args);
+
     return $self;
 }
 
@@ -65,7 +67,11 @@ Takes a string of code, formats it, and returns the result
 sub tidy {
     my ( $self, $code ) = @_;
 
+    my @tokens = $self->{tokenizer}->tokenize_sql($code);
+
     # TODO: This is a stub...
+
+    $code = join( ' ', @tokens );
 
     return $code;
 }
