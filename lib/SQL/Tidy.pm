@@ -44,7 +44,7 @@ sub new {
     # Regexp for "Safe-to-unquote" identifiers
     # Not that this will probably ever make sense as a config option...
     $args->{stu_ident} ||= '[A-Z0-9_]+';
-    my stu_ident = $args->{stu_ident};
+    my $stu_ident = $args->{stu_ident};
     $args->{stu_re} ||= qr/^"$stu_ident"$/;
 
     foreach my $key ( keys %{$args} ) {
