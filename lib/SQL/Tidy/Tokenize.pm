@@ -74,6 +74,9 @@ sub tokenize_sql {
                 }
             }
         }
+        else {
+            push @new_tokens, $token;
+        }
     }
 
     foreach my $idx ( 1 .. $#new_tokens ) {
