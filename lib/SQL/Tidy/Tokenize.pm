@@ -27,7 +27,7 @@ Create, and return, a new instance of this
 sub new {
     my ( $this, $args ) = @_;
     my $class = ref($this) || $this;
-    my $self  = {};
+    my $self = {};
     bless $self, $class;
 
     foreach my $key ( keys %{$args} ) {
@@ -38,7 +38,6 @@ sub new {
 
     return $self;
 }
-
 
 =item tokenize_sql ( statement )
 
@@ -81,13 +80,13 @@ sub tokenize_sql {
         # Also, the tokenizer splits two character operators such that,
         # for example, '>=' is two tokens ('>' and '=') instead of the
         # desired one.
-        if ($new_tokens[$idx] =~ m/^[><=]$/ and $new_tokens[$idx - 1] =~ m/^[><=!]$/ ) {
-            $new_tokens[$idx - 1] .= $new_tokens[$idx];
+        if ( $new_tokens[$idx] =~ m/^[><=]$/ and $new_tokens[ $idx - 1 ] =~ m/^[><=!]$/ ) {
+            $new_tokens[ $idx - 1 ] .= $new_tokens[$idx];
             $new_tokens[$idx] = undef;
         }
         # Likewise ':='
-        elsif ($new_tokens[$idx] eq '=' and $new_tokens[$idx-1] eq ':' ) {
-            $new_tokens[$idx - 1] .= $new_tokens[$idx];
+        elsif ( $new_tokens[$idx] eq '=' and $new_tokens[ $idx - 1 ] eq ':' ) {
+            $new_tokens[ $idx - 1 ] .= $new_tokens[$idx];
             $new_tokens[$idx] = undef;
         }
     }
