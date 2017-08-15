@@ -82,7 +82,9 @@ sub tidy {
 
     ( $comments, @tokens ) = $self->{comments}->tag_comments(@tokens);
     ( $strings,  @tokens ) = $self->{strings}->tag_strings(@tokens);
-    ( $dml,      @tokens ) = $self->{dmls}->tag_dml(@tokens);
+
+    @tokens = $self->normalize(@tokens);
+    ( $dml, @tokens ) = $self->{dmls}->tag_dml(@tokens);
 
     # TODO: This is a stub...
 
@@ -93,6 +95,37 @@ sub tidy {
     $code = join( ' ', @tokens );
 
     return $code;
+}
+
+=item normalize ( tokens )
+
+Remove white-space and empty tokens from the supplied list of tokens
+
+Returns the modified list
+
+=cut
+
+sub normalize {
+    my ( $self, @tokens ) = @_;
+    my @new_tokens;
+
+    foreach $token (@tokens) {
+
+        if ( $token eq "\n" or $token eq "\r" ) {
+            # Remove new-lines
+        }
+        elsif ( $token =~ $self->{space_re} ) {
+            # Remove spaces
+        }
+        elsif ( $token eq '' ) {
+            # Remove empty tokens
+        }
+        else {
+            push @new_tokens, $token;
+        }
+    }
+
+    return @new_tokens;
 }
 
 =back
