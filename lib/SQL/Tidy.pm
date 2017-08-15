@@ -109,16 +109,16 @@ sub normalize {
     my ( $self, @tokens ) = @_;
     my @new_tokens;
 
-    foreach $token (@tokens) {
+    foreach my $token (@tokens) {
 
-        if ( $token eq "\n" or $token eq "\r" ) {
+        if ( $token eq '' ) {
+            # Remove empty tokens
+        }
+        elsif ( $token eq "\n" or $token eq "\r" ) {
             # Remove new-lines
         }
-        elsif ( $token =~ $self->{space_re} ) {
+        elsif ( $token =~ m/^[ \t]+$/ ) {
             # Remove spaces
-        }
-        elsif ( $token eq '' ) {
-            # Remove empty tokens
         }
         else {
             push @new_tokens, $token;
