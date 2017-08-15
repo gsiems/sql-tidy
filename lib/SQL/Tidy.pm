@@ -5,6 +5,7 @@ use warnings;
 use Carp();
 use Data::Dumper;
 
+use SQL::Tidy::Comment;
 use SQL::Tidy::Tokenize;
 
 =head1 NAME
@@ -45,7 +46,7 @@ sub new {
     # Not that this will probably ever make sense as a config option...
     $args->{stu_ident} ||= '[A-Z0-9_]+';
     my $stu_ident = $args->{stu_ident};
-    $args->{stu_re} ||= qr/^"$stu_ident"$/;
+    $args->{stu_re} = qr/^"$stu_ident"$/;
 
     foreach my $key ( keys %{$args} ) {
         unless ( exists $args->{$key} ) {
@@ -53,7 +54,10 @@ sub new {
         }
     }
 
+    $args->{space_re} = qr/^[ \t]+$/;
+
     $self->{tokenizer} = SQL::Tidy::Tokenize->new($args);
+    $self->{comments} = SQL::Tidy::Comment->new($args);
 
     return $self;
 }
@@ -67,9 +71,15 @@ Takes a string of code, formats it, and returns the result
 sub tidy {
     my ( $self, $code ) = @_;
 
+    my $comments;
     my @tokens = $self->{tokenizer}->tokenize_sql($code);
 
+    ( $comments, @tokens ) = $self->{comments}->tag_comments(@tokens);
+
+
     # TODO: This is a stub...
+
+    @tokens = $self->{comments}->untag_comments( $comments, @tokens );
 
     $code = join( ' ', @tokens );
 
