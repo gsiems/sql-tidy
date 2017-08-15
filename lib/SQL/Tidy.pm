@@ -86,7 +86,7 @@ sub tidy {
 
     # TODO: This is a stub...
 
-    #@tokens = $self->{dmls}->untag_dml( $dml, @tokens );
+    @tokens = $self->{dmls}->untag_dml( $dml, @tokens );
     @tokens = $self->{strings}->untag_strings( $strings, @tokens );
     @tokens = $self->{comments}->untag_comments( $comments, @tokens );
 
