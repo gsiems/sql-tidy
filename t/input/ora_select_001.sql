@@ -1,3 +1,4 @@
+-- A fairly short query with joins, a comment, and a few parens
 SELECT exp.line_num,
         exp.dist_line_num,
         row_number () OVER (
@@ -9,7 +10,7 @@ SELECT exp.line_num,
         exp.invoice_id,
         round (
             CASE
-                WHEN pol.doc_type IN ( 'BPA', 'BPC', 'CRO' ) THEN exp.merchandise_amt
+                WHEN pol.po_type IN ( 'A', 'B', 'C' ) THEN exp.merchandise_amount
                 ELSE exp.monetary_amount
                 END, 2 ) AS total_approved_amt,
         bcat.category_code
