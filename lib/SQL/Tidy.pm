@@ -6,6 +6,7 @@ use Carp();
 use Data::Dumper;
 
 use SQL::Tidy::Comment;
+use SQL::Tidy::DML;
 use SQL::Tidy::String;
 use SQL::Tidy::Tokenize;
 
@@ -60,6 +61,7 @@ sub new {
     $self->{tokenizer} = SQL::Tidy::Tokenize->new($args);
     $self->{comments}  = SQL::Tidy::Comment->new($args);
     $self->{strings}   = SQL::Tidy::String->new($args);
+    $self->{dmls}      = SQL::Tidy::DML->new($args);
 
     return $self;
 }
@@ -75,13 +77,16 @@ sub tidy {
 
     my $comments;
     my $strings;
+    my $dml;
     my @tokens = $self->{tokenizer}->tokenize_sql($code);
 
     ( $comments, @tokens ) = $self->{comments}->tag_comments(@tokens);
     ( $strings,  @tokens ) = $self->{strings}->tag_strings(@tokens);
+    ( $dml,      @tokens ) = $self->{dmls}->tag_dml(@tokens);
 
     # TODO: This is a stub...
 
+    #@tokens = $self->{dmls}->untag_dml( $dml, @tokens );
     @tokens = $self->{strings}->untag_strings( $strings, @tokens );
     @tokens = $self->{comments}->untag_comments( $comments, @tokens );
 
