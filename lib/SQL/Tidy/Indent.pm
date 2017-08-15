@@ -116,6 +116,71 @@ sub to_tab_count {
     return $return;
 }
 
+=item subtract_indents ( string, tab_count )
+
+Remove tab_count spaces from a string
+
+=cut
+
+sub subtract_indents {
+    my ($self, $string, $tab_count) = @_;
+
+    # If the string has leading spaces and use_tabs is false then just
+    # remove the appropriate amount of leading space
+
+    # If the string has leading tabs and use_tabs is true then just
+    # remove the appropriate number of tabs.
+
+    # Otherwise... it's a bit complicated?
+
+    my ($indent) = $string =~ m/^([\t ]+)/;
+    if ($indent) {
+
+        my $x;
+        my $count = 0;
+        foreach my $token ( split '', $indent) {
+            if ($token eq "\t") {
+                $count = 0;
+                $x++;
+            }
+            elsif ($token eq ' ') {
+                $count++;
+                if ($count == $self->{tab_size}) {
+                    $count = 0;
+                    $x++;
+                }
+            }
+            last if ($x >= $tab_count);
+        }
+        $string = substr( $string, $x );
+    }
+
+    return $string;
+}
+
+=item add_indents ( string, tab_count )
+
+Add tab_count spaces to a string
+
+=cut
+
+sub add_indents {
+    my ($self, $string, $tab_stops) = @_;
+
+    my $return = '';
+    $string = '' unless (defined $string);
+
+    if (defined $tab_stops and $tab_stops > 0) {
+        $return = $self->to_indent($tab_stops) . $string;
+    }
+    else {
+        $return = $string;
+    }
+
+    return $return;
+}
+
+
 =back
 
 =head1 Copyright (C) 2017 gsiems.
