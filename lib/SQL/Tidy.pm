@@ -57,7 +57,7 @@ sub new {
     $args->{space_re} = qr/^[ \t]+$/;
 
     $self->{tokenizer} = SQL::Tidy::Tokenize->new($args);
-    $self->{comments} = SQL::Tidy::Comment->new($args);
+    $self->{comments}  = SQL::Tidy::Comment->new($args);
 
     return $self;
 }
@@ -75,7 +75,6 @@ sub tidy {
     my @tokens = $self->{tokenizer}->tokenize_sql($code);
 
     ( $comments, @tokens ) = $self->{comments}->tag_comments(@tokens);
-
 
     # TODO: This is a stub...
 

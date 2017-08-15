@@ -54,7 +54,7 @@ Returns a hash-ref of the comment tags and the modified list of tokens
 sub tag_comments {
     my ( $self, @tokens ) = @_;
     my @new_tokens = ( '', '' );
-    push @tokens, ('', '');
+    push @tokens, ( '', '' );
 
     my %comments;
     foreach my $idx ( 0 .. $#tokens ) {
@@ -71,8 +71,8 @@ sub tag_comments {
             $comments{$key}{comment} = $token;
             $comments{$key}{indent}  = 0;
 
-            if ($idx and $tokens[ $idx - 1 ] =~ $self->{space_re}) {
-                $comments{$key}{indent} = $self->{indent}->to_tab_count($tokens[ $idx - 1 ]);
+            if ( $idx and $tokens[ $idx - 1 ] =~ $self->{space_re} ) {
+                $comments{$key}{indent} = $self->{indent}->to_tab_count( $tokens[ $idx - 1 ] );
             }
             $token = $key;
         }
@@ -146,7 +146,7 @@ sub untag_comments {
                 my $dint = $self->{indent}->to_indent($indent_diff);
 
                 foreach my $idx ( 1 .. $#ary ) {
-                    my $line = $self->{indent}->add_indents($ary[$idx], $indent_diff);
+                    my $line = $self->{indent}->add_indents( $ary[$idx], $indent_diff );
 
                     $line =~ s/ +$//;
                     $ary[$idx] = $line;
@@ -160,7 +160,7 @@ sub untag_comments {
                 $indent_diff = abs($indent_diff);
 
                 foreach my $idx ( 1 .. $#ary ) {
-                    my $line = $self->{indent}->subtract_indents($ary[$idx], $indent_diff);
+                    my $line = $self->{indent}->subtract_indents( $ary[$idx], $indent_diff );
                     $ary[$idx] = $line;
                 }
                 $comment = join "\n", @ary;
