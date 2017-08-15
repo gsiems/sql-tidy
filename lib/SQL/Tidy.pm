@@ -6,6 +6,7 @@ use Carp();
 use Data::Dumper;
 
 use SQL::Tidy::Comment;
+use SQL::Tidy::String;
 use SQL::Tidy::Tokenize;
 
 =head1 NAME
@@ -58,6 +59,7 @@ sub new {
 
     $self->{tokenizer} = SQL::Tidy::Tokenize->new($args);
     $self->{comments}  = SQL::Tidy::Comment->new($args);
+    $self->{strings}   = SQL::Tidy::String->new($args);
 
     return $self;
 }
@@ -72,12 +74,15 @@ sub tidy {
     my ( $self, $code ) = @_;
 
     my $comments;
+    my $strings;
     my @tokens = $self->{tokenizer}->tokenize_sql($code);
 
     ( $comments, @tokens ) = $self->{comments}->tag_comments(@tokens);
+    ( $strings,  @tokens ) = $self->{strings}->tag_strings(@tokens);
 
     # TODO: This is a stub...
 
+    @tokens = $self->{strings}->untag_strings( $strings, @tokens );
     @tokens = $self->{comments}->untag_comments( $comments, @tokens );
 
     $code = join( ' ', @tokens );
