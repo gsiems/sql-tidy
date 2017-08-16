@@ -6,7 +6,9 @@ use Carp();
 use Data::Dumper;
 
 use SQL::Tidy::Comment;
+use SQL::Tidy::Dialect;
 use SQL::Tidy::DML;
+use SQL::Tidy::PL;
 use SQL::Tidy::String;
 use SQL::Tidy::Tokenize;
 
@@ -37,12 +39,21 @@ sub new {
     bless $self, $class;
 
     # Set defaults if not otherwise set
-    $args->{use_tabs}       ||= 0;          # Spaces all the way
+    $args->{use_tabs}       ||= 0;            # Spaces all the way
     $args->{tab_size}       ||= 4;
     $args->{max_line_width} ||= 120;
     $args->{min_line_width} ||= 40;
-    $args->{keywords_case}  ||= 'upper';
-    $args->{case_folding}   ||= 'upper';    # It is in the SQL standard after all
+    $args->{case_folding}   ||= 'upper';      # It is in the SQL standard after all
+    $args->{dialect}        ||= 'Default';    # Oracle, PostgreSQL, ...
+
+    if ( not defined $args->{uppercase_keywords} ) {
+        $args->{uppercase_keywords} = 1;
+    }
+
+    # Convert Oracle functions:
+    $args->{convert_nvl}    ||= 0;            # Convert nvl to coalesce
+    $args->{convert_nvl2}   ||= 0;            # Convert nvl2 to CASE structure
+    $args->{convert_decode} ||= 0;            # Convert decode to CASE structure
 
     # Regexp for "Safe-to-unquote" identifiers
     # Not that this will probably ever make sense as a config option...
@@ -61,6 +72,7 @@ sub new {
     $self->{tokenizer} = SQL::Tidy::Tokenize->new($args);
     $self->{comments}  = SQL::Tidy::Comment->new($args);
     $self->{strings}   = SQL::Tidy::String->new($args);
+    $self->{dialect}   = SQL::Tidy::Dialect->new($args);
     $self->{dmls}      = SQL::Tidy::DML->new($args);
 
     return $self;
@@ -86,11 +98,25 @@ sub tidy {
     @tokens = $self->normalize(@tokens);
     ( $dml, @tokens ) = $self->{dmls}->tag_dml(@tokens);
 
-    # TODO: This is a stub...
+    # TODO: tag PL and/or DDL
+    #   ( $pl, @tokens ) = $self->{pls}->tag_pl(@tokens);
+    #
+    # TODO: format pieces (to include unquoting identifiers/capitalizing key-words)
+    #   TODO: format DDL
+    #   TODO: format PL (DDL indentations as input?)
+    #   TODO: format DML (DDL/PL indentations as input?)
+    #
+    # TODO: untag PL and/or DDL
+    #   @tokens = $self->{pls}->untag_pl( $pl, @tokens );
 
     @tokens = $self->{dmls}->untag_dml( $dml, @tokens );
+
+    # TODO: Fix line-wrapping here? Or as part of format DDL/DML/PL?
+
     @tokens = $self->{strings}->untag_strings( $strings, @tokens );
     @tokens = $self->{comments}->untag_comments( $comments, @tokens );
+
+    # TODO: any cleanup?
 
     $code = join( ' ', @tokens );
 
