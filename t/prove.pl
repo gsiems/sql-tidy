@@ -19,7 +19,10 @@ my $tidy = SQL::Tidy->new();
 # Cleanup any previous failures
 `find failed -name "*.sql" -exec rm {} \\;`;
 
-my @source_files = `find input/*sql`;
+my @source_files = @ARGV;
+if (not @source_files) {
+    @source_files = `find input/*sql`;
+}
 chomp @source_files;
 
 my $passed       = 0;
