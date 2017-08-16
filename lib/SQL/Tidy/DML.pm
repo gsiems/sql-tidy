@@ -39,7 +39,7 @@ sub new {
     return $self;
 }
 
-=item tag_DML ( tokens )
+=item tag_dml ( tokens )
 
 Replaces SQL query statements (DML blocks as opposed to PL-code, etc.)
 with a tag and stores the original DML in a reference hash.
@@ -79,48 +79,26 @@ sub tag_dml {
             elsif ( $token eq ';' ) {
                 $dml_key = undef;
             }
-
-            if ($dml_key) {
-                push @{ $dml{$dml_key} }, $token;
-            }
         }
         elsif ( !$is_grant and $token =~ m/^(WITH|SELECT|INSERT|UPDATE|DELETE|MERGE)$/i ) {
             # If the token is (WITH|SELECT|INSERT|UPDATE|DELETE|MERGE),
             # and we aren't already in a statement then it looks like
             # we are starting a statement.
-            if (@new_tokens) {
-                foreach my $j ( 1 .. $#new_tokens ) {
-                    next if ( $new_tokens[ -$j ] eq "\n" );
-                    next if ( $new_tokens[ -$j ] =~ /^\s+$/ );
-                    next if ( $new_tokens[ -$j ] =~ /^~~comment/ );
-                    next if ( $new_tokens[ -$j ] eq "/" );
-                    last if ( uc $new_tokens[ -$j ] eq 'GRANT' );
-                    last if ( uc $new_tokens[ -$j ] eq 'REVOKE' );
-
-                    $dml_key = '~~dml_' . sprintf( "%04d", $idx );
-                    push @{ $dml{$dml_key} }, $token;
-                    push @new_tokens, $dml_key;
-
-                    $parens = 0;
-
-                    last;
-                }
-            }
-            else {
-                $dml_key = '~~dml_' . sprintf( "%04d", $idx );
-                push @{ $dml{$dml_key} }, $token;
-                push @new_tokens, $dml_key;
-                $parens = 0;
-            }
+            $dml_key = '~~dml_' . sprintf( "%04d", $idx );
+            push @new_tokens, $dml_key;
+            $parens = 0;
         }
 
-        if ( !$dml_key ) {
+        if ($dml_key) {
+            push @{ $dml{$dml_key} }, $token;
+        }
+        else {
             push @new_tokens, $token;
         }
 
-        # Ensure that "GRANT ... TO user WITH GRANT OPTION" does not
+        # Ensure that "GRANT ... TO user [WITH GRANT OPTION]" does not
         # get partially tagged as DML
-        if ( $token eq 'GRANT' ) {
+        if ( $token eq 'GRANT' or $token eq 'REVOKE' ) {
             $is_grant = 1;
         }
         elsif ( $token eq ';' ) {
@@ -151,13 +129,15 @@ sub tag_dml {
     return ( \%dml, grep { $_ ne '' } @new_tokens );
 }
 
-=item tag_sub_dml ( dml )
+=item tag_sub_dml ( parent_key, tokens )
 
+Replaces sub-query statements for the parent query (parent_key)
+with a tag and stores the original DML in a reference hash.
 
+Used for recursively separating all sub-queries to facilitate
+formatting.
 
-
-
-
+Returns a hash-ref of the DML tags and the modified list of tokens.
 
 =cut
 
@@ -192,6 +172,10 @@ sub tag_sub_dml {
                 if ( $sub_parens < 0 ) {
                     $dml_key = undef;
                 }
+            }
+            elsif ( $idx > 0 and uc $token eq 'SELECT' ) {
+                # SELECT statements are always a new statement
+                $dml_key = join( '.', $parent_key, sprintf( "%04d", $idx ) );
             }
 
             if ($dml_key) {
