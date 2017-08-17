@@ -250,14 +250,15 @@ sub untag_dml {
 sub format_dml {
     my ( $self, $comments, $dmls ) = @_;
 
-    foreach my $key ( keys %{$dmls} ) {
-        my @ary = $self->add_vspace( $comments, @{ $dmls->{$key} } );
+    if ( $dmls and ref($dmls) eq 'HASH' ) {
+        foreach my $key ( keys %{$dmls} ) {
+            my @ary = $self->add_vspace( $comments, @{ $dmls->{$key} } );
 
-        @ary = $self->add_indents(@ary);
+            @ary = $self->add_indents(@ary);
 
-        $dmls->{$key} = \@ary;
+            $dmls->{$key} = \@ary;
+        }
     }
-
     return $dmls;
 }
 
