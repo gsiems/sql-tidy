@@ -5,6 +5,7 @@ use warnings FATAL => 'all';
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 
+use Data::Dumper;
 use SQL::Tidy;
 
 # TODO: Add option for verbosity (show all, only show failed, display summary # failed vs. total)
@@ -53,9 +54,8 @@ foreach my $source_file (@source_files) {
 
     # Note that we don't consider extra new-lines at the end of the file
     # as a fail--
-
-    $expected_code =~ s/\n\n+$/\n/;
-    $tidy_code =~ s/\n\n+$/\n/;
+    $tidy_code     = tidy_finale($tidy_code);
+    $expected_code = tidy_finale($expected_code);
 
     if ( $tidy_code eq $expected_code ) {
         print "PASS: $source_file\n";
@@ -80,6 +80,18 @@ Number Passed:  $passed
 Number Failed:  $failed
 
 };
+
+sub tidy_finale {
+    # Clean-up the "ragged" new-lines at the end of the code
+
+    my ($code) = @_;
+
+    my @ary = split( /(\n)/, $code );
+    while ( $ary[-1] eq '' or $ary[-1] eq "\n" ) {
+        pop @ary;
+    }
+    return join( '', @ary ) . "\n\n";
+}
 
 sub _slurp_file {
     local ( *ARGV, $/ );
