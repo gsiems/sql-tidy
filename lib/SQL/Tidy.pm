@@ -107,7 +107,6 @@ sub tidy {
     @tokens = $self->{ddl}->format_ddl( $comments, @tokens );
 
     #   TODO: format PL (DDL indentations as input?)
-    #   TODO: format DML
 
     $dml = $self->{dmls}->format_dml( $comments, $dml );
 
@@ -164,7 +163,6 @@ sub normalize {
 
     return @new_tokens;
 }
-
 
 sub fix_spacing {
     my ( $self, @tokens ) = @_;
