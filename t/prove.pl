@@ -87,8 +87,10 @@ sub tidy_finale {
     my ($code) = @_;
 
     my @ary = split( /(\n)/, $code );
-    while ( $ary[-1] eq '' or $ary[-1] eq "\n" ) {
-        pop @ary;
+    if (@ary) {
+        while ( $ary[-1] eq '' or $ary[-1] eq "\n" ) {
+            pop @ary;
+        }
     }
     return join( '', @ary ) . "\n\n";
 }
