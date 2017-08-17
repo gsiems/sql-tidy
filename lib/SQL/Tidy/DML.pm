@@ -292,6 +292,7 @@ sub add_vspace {
             'INTO'      => 1,
             'FROM'      => 1,
             'PIVOT'     => 1,
+            'FOR'       => 1,
             'JOIN'      => 1,
             'ON'        => 1,
             'USING'     => 1,
@@ -455,15 +456,13 @@ sub add_indents {
             'FROM' => 1,
             'JOIN' => 1,
 
-            'LEFT'    => 1,
-            'RIGHT'   => 1,
-            'INNER'   => 1,
-            'OUTER'   => 1,
-            'FULL'    => 1,
-            'CROSS'   => 1,
-            'NATURAL' => 1,
-            #'ON'       => 2,
-            #'USING'    => 2,
+            'LEFT'      => 1,
+            'RIGHT'     => 1,
+            'INNER'     => 1,
+            'OUTER'     => 1,
+            'FULL'      => 1,
+            'CROSS'     => 1,
+            'NATURAL'   => 1,
             'WHERE'     => 1,
             'GROUP'     => 1,
             'HAVING'    => 1,
@@ -546,9 +545,6 @@ sub add_indents {
 
             my $indent_case = scalar @cases;
             if ($indent_case) {
-                #if ($next_token eq 'WHEN' or $next_token eq 'ELSE' or $next_token eq 'END') {
-                #    $indent_case++;
-                #}
             }
 
             # if the parens are non-balanced relative to the start
