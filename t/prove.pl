@@ -20,7 +20,7 @@ my $tidy = SQL::Tidy->new();
 `find failed -name "*.sql" -exec rm {} \\;`;
 
 my @source_files = @ARGV;
-if (not @source_files) {
+if ( not @source_files ) {
     @source_files = `find input/*sql`;
 }
 chomp @source_files;
