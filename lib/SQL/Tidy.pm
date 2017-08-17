@@ -7,6 +7,7 @@ use Data::Dumper;
 
 use SQL::Tidy::Comment;
 use SQL::Tidy::Dialect;
+use SQL::Tidy::DDL;
 use SQL::Tidy::DML;
 use SQL::Tidy::PL;
 use SQL::Tidy::String;
@@ -73,6 +74,7 @@ sub new {
     $self->{comments}  = SQL::Tidy::Comment->new($args);
     $self->{strings}   = SQL::Tidy::String->new($args);
     $self->{dialect}   = SQL::Tidy::Dialect->new($args);
+    $self->{ddl}       = SQL::Tidy::DDL->new($args);
     $self->{dmls}      = SQL::Tidy::DML->new($args);
 
     return $self;
@@ -102,23 +104,27 @@ sub tidy {
     #   ( $pl, @tokens ) = $self->{pls}->tag_pl(@tokens);
     #
     # TODO: format pieces (to include unquoting identifiers/capitalizing key-words)
-    #   TODO: format DDL
+    @tokens = $self->{ddl}->format_ddl( $comments, @tokens );
+
     #   TODO: format PL (DDL indentations as input?)
-    #   TODO: format DML (DDL/PL indentations as input?)
-    #
+    #   TODO: format DML
+
+    $dml = $self->{dmls}->format_dml( $comments, $dml );
+
     # TODO: untag PL and/or DDL
     #   @tokens = $self->{pls}->untag_pl( $pl, @tokens );
 
     @tokens = $self->{dmls}->untag_dml( $dml, @tokens );
 
     # TODO: Fix line-wrapping here? Or as part of format DDL/DML/PL?
+    @tokens = $self->fix_spacing(@tokens);
 
     @tokens = $self->{strings}->untag_strings( $strings, @tokens );
     @tokens = $self->{comments}->untag_comments( $comments, @tokens );
 
     # TODO: any cleanup?
 
-    $code = join( ' ', @tokens );
+    $code = join( '', @tokens );
 
     return $code;
 }
@@ -152,6 +158,64 @@ sub normalize {
     }
 
     return @new_tokens;
+}
+
+
+sub fix_spacing {
+    my ( $self, @tokens ) = @_;
+
+    # In general we assume a space between all tokens and only worry
+    # about the cases where that is not the case.
+    my @new_tokens = map { $_, ' ' } @tokens;
+    unshift @new_tokens, '';
+    push @new_tokens, '';
+
+    foreach my $idx ( 1 .. $#new_tokens - 1 ) {
+        my $token = $new_tokens[$idx];
+
+        # No spaces before or after new lines
+        if ( $token eq "\n" ) {
+            $new_tokens[ $idx - 1 ] = '';
+            $new_tokens[ $idx + 1 ] = '';
+        }
+        # No spaces before commas
+        elsif ( $token eq ',' ) {
+            $new_tokens[ $idx - 1 ] = '';
+        }
+
+        # No spaces on either side of existing multiple-spaces
+        elsif ( $token =~ m/^  +$/ ) {
+            $new_tokens[ $idx - 1 ] = '';
+            $new_tokens[ $idx + 1 ] = '';
+        }
+        # Comparisons
+        # if it is a math operator combined with a number and comparison operator then what?
+        # '= +1', '> -1'.
+        # '-3 >=' ???
+        elsif ( $token =~ m/^[-+]$/
+            and exists $self->{operators}{ $new_tokens[ $idx - 2 ] }{comparison}
+            and $new_tokens[ $idx + 2 ] =~ m/^[0-9.]/ )
+        {
+
+            $new_tokens[ $idx + 1 ] = '';
+        }
+    }
+
+    # remove trailing spaces from the end of the token list
+    my $re_spaces = qr/^ +$/;
+
+    foreach my $idx ( 1 .. $#new_tokens ) {
+        my $token = $new_tokens[ -$idx ];
+        next if ( $token eq '' );
+        if ( $token =~ $re_spaces ) {
+            $new_tokens[ -$idx ] = '';
+        }
+        else {
+            last;
+        }
+    }
+
+    return grep { $_ ne '' } @new_tokens;
 }
 
 =back
