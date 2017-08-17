@@ -126,6 +126,11 @@ sub tidy {
 
     $code = join( '', @tokens );
 
+    $code =~ s/^\n+//;
+    $code =~ s/RETURN - /RETURN -/g;
+    $code =~ s/\( \)/()/g;
+    $code =~ s/\( \* \)/(*)/g;
+
     return $code;
 }
 
