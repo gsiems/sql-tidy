@@ -48,7 +48,11 @@ Returns a hash-ref of the PL tags and the modified list of tokens.
 
 sub tag_pl {
     my ( $self, @tokens ) = @_;
+
     my %pl;
+
+    return ( \%pl, @tokens );
+
     my $pl_key;
     my @new_tokens;
     my $is_grant = 0;
@@ -134,6 +138,8 @@ Returns the modified list of tokens
 
 sub untag_pl {
     my ( $self, $pls, @tokens ) = @_;
+    return @tokens;
+
     my @new_tokens = ('');
 
     foreach my $idx ( 0 .. $#tokens ) {
@@ -144,6 +150,78 @@ sub untag_pl {
         else {
             push @new_tokens, $token;
         }
+    }
+
+    return @new_tokens;
+}
+
+sub format_pl {
+    my ( $self, $comments, $pls ) = @_;
+
+    if ( $pls and ref($pls) eq 'HASH' ) {
+        foreach my $key ( keys %{$pls} ) {
+            my @ary = $self->add_vspace( $comments, @{ $pls->{$key} } );
+
+            @ary = $self->add_indents(@ary);
+
+            $pls->{$key} = \@ary;
+        }
+    }
+    return $pls;
+}
+
+sub add_vspace {
+    my ( $self, $comments, @tokens ) = @_;
+    my @new_tokens;
+
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token       = uc $tokens[$idx];
+        my $line_before = 0;
+        my $line_after  = 0;
+
+        if ( $token eq ';' ) {
+            $line_after = 1;
+        }
+        elsif ( $token eq '/' ) {
+            $line_after = 1;
+        }
+        elsif ( $token =~ m/^~~comment_/i ) {
+            $line_before = $comments->{ lc $token }{newline_before};
+            $line_after  = $comments->{ lc $token }{newline_after};
+        }
+
+        if ( 0 == $idx ) {
+            $line_before = 0;
+        }
+        if ( $#tokens == $idx ) {
+            $line_after = 0;
+        }
+
+        # Leading new-line
+        if ( $line_before and $new_tokens[-1] ne "\n" ) {
+            push @new_tokens, "\n";
+        }
+
+        push @new_tokens, $tokens[$idx];
+
+        # Trailing new-line
+        if ($line_after) {
+            push @new_tokens, "\n";
+        }
+    }
+
+    return @new_tokens;
+}
+
+sub add_indents {
+    my ( $self, @tokens ) = @_;
+    my @new_tokens;
+
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token = uc $tokens[$idx];
+
+        push @new_tokens, $tokens[$idx];
+
     }
 
     return @new_tokens;
