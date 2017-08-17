@@ -76,6 +76,7 @@ sub new {
     $self->{dialect}   = SQL::Tidy::Dialect->new($args);
     $self->{ddl}       = SQL::Tidy::DDL->new($args);
     $self->{dmls}      = SQL::Tidy::DML->new($args);
+    $self->{pls}       = SQL::Tidy::PL->new($args);
 
     return $self;
 }
@@ -92,6 +93,7 @@ sub tidy {
     my $comments;
     my $strings;
     my $dml;
+    my $pl;
     my @tokens = $self->{tokenizer}->tokenize_sql($code);
 
     ( $comments, @tokens ) = $self->{comments}->tag_comments(@tokens);
@@ -100,19 +102,17 @@ sub tidy {
     @tokens = $self->normalize(@tokens);
     ( $dml, @tokens ) = $self->{dmls}->tag_dml(@tokens);
 
-    # TODO: tag PL and/or DDL
-    #   ( $pl, @tokens ) = $self->{pls}->tag_pl(@tokens);
-    #
     # TODO: format pieces (to include unquoting identifiers/capitalizing key-words)
+
+    ( $pl, @tokens ) = $self->{pls}->tag_pl(@tokens);
+
     @tokens = $self->{ddl}->format_ddl( $comments, @tokens );
 
-    #   TODO: format PL (DDL indentations as input?)
+    $pl = $self->{pls}->format_pl( $comments, $pl );
 
     $dml = $self->{dmls}->format_dml( $comments, $dml );
 
-    # TODO: untag PL and/or DDL
-    #   @tokens = $self->{pls}->untag_pl( $pl, @tokens );
-
+    @tokens = $self->{pls}->untag_pl( $pl, @tokens );
     @tokens = $self->{dmls}->untag_dml( $dml, @tokens );
 
     # TODO: Fix line-wrapping here? Or as part of format DDL/DML/PL?
