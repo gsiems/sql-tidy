@@ -37,16 +37,13 @@ sub new {
     return $self;
 }
 
-
-
 sub format_ddl {
     my ( $self, $comments, @tokens ) = @_;
-    my  @new_tokens = $self->add_vspace( $comments, @tokens );
+    my @new_tokens = $self->add_vspace( $comments, @tokens );
     @new_tokens = $self->add_indents(@new_tokens);
 
     return @new_tokens;
 }
-
 
 sub add_vspace {
     my ( $self, $comments, @tokens ) = @_;
@@ -57,10 +54,10 @@ sub add_vspace {
         my $line_before = 0;
         my $line_after  = 0;
 
-        if ($token eq ';') {
+        if ( $token eq ';' ) {
             $line_after = 1;
         }
-        elsif ($token eq '/') {
+        elsif ( $token eq '/' ) {
             $line_after = 1;
         }
         elsif ( $token =~ m/^~~comment_/i ) {
@@ -68,8 +65,8 @@ sub add_vspace {
             $line_after  = $comments->{ lc $token }{newline_after};
         }
 
-        if (0 == $idx) {
-            $line_before = 0
+        if ( 0 == $idx ) {
+            $line_before = 0;
         }
         if ( $#tokens == $idx ) {
             $line_after = 0;
@@ -96,7 +93,7 @@ sub add_indents {
     my @new_tokens;
 
     foreach my $idx ( 0 .. $#tokens ) {
-        my $token       = uc $tokens[$idx];
+        my $token = uc $tokens[$idx];
 
         push @new_tokens, $tokens[$idx];
 
