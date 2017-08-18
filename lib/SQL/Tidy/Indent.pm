@@ -19,6 +19,9 @@ spaces)
 
 =cut
 
+my $use_tabs;
+my $tab_size;
+
 =item new
 
 Create, and return, a new instance of this
@@ -31,11 +34,8 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    foreach my $key ( keys %{$args} ) {
-        unless ( exists $args->{$key} ) {
-            $self->{$_} = $args->{$_};
-        }
-    }
+    $use_tabs = $args->{use_tabs};
+    $tab_size = $args->{tab_size};
 
     return $self;
 }
@@ -52,11 +52,11 @@ sub to_indent {
 
     my $return = '';
 
-    if ( $self->{use_tabs} ) {
+    if ($use_tabs) {
         $return = "\t" x $tab_count;
     }
     else {
-        $return = ' ' x ( $self->{tab_size} * $tab_count );
+        $return = ' ' x ( $tab_size * $tab_count );
     }
     return $return;
 }
@@ -78,7 +78,7 @@ sub to_tab_count {
     elsif ( $string =~ m/^[ ]+$/ ) {
         # If the string is all spaces then divide the length by the
         # number of spaces per tab-stop
-        $return = int( length($string) / $self->{tab_size} );
+        $return = int( length($string) / $tab_size );
     }
     elsif ( $string =~ m/^[\t]+$/ ) {
         # If the string is all tabs then return the number of tabs
@@ -99,7 +99,7 @@ sub to_tab_count {
             }
             elsif ( $token eq ' ' ) {
                 $count++;
-                if ( $count == $self->{tab_size} ) {
+                if ( $count == $tab_size ) {
                     $count = 0;
                     $return++;
                 }
@@ -145,7 +145,7 @@ sub subtract_indents {
             }
             elsif ( $token eq ' ' ) {
                 $count++;
-                if ( $count == $self->{tab_size} ) {
+                if ( $count == $tab_size ) {
                     $count = 0;
                     $x++;
                 }
