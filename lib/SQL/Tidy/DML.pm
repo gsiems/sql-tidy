@@ -20,6 +20,9 @@ Tag and untag blocks of SQL queries (DML)
 
 =cut
 
+my $indenter;
+my $space_re;
+
 =item new
 
 Create, and return, a new instance of this
@@ -32,11 +35,8 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    foreach my $key ( keys %{$args} ) {
-        unless ( exists $args->{$key} ) {
-            $self->{$_} = $args->{$_};
-        }
-    }
+    $indenter = SQL::Tidy::Indent->new($args);
+    $space_re = $args->{space_re};
 
     return $self;
 }
@@ -212,13 +212,13 @@ sub untag_dml {
             # Determine the indent to add to each line base on the
             # indent of the dml tag
             my $indent = (@new_tokens) ? $new_tokens[-1] : '';
-            if ( $indent =~ m/^[\t ]+$/ ) {
+            if ( $indent =~ $space_re ) {
                 # Bump the indent of each indentation token in the dml
                 # block (excepting the first of course)
                 foreach my $dml_idx ( 0 .. $#ary ) {
                     my $dml_tok = $ary[$dml_idx];
 
-                    if ( $dml_idx > 0 and $ary[ $dml_idx - 1 ] eq "\n" and $dml_tok =~ m/^[\t ]+$/ ) {
+                    if ( $dml_idx > 0 and $ary[ $dml_idx - 1 ] eq "\n" and $dml_tok =~ $space_re ) {
                         $dml_tok = $indent . $dml_tok;
                     }
                     push @new_tokens, $dml_tok;
@@ -488,15 +488,6 @@ sub add_indents {
         'DELETE' => { 'WHERE' => 1, },
     );
 
-    my $indent_char = ' ';
-
-    if ( $self->{use_tabs} ) {
-        $indent_char = "\t";
-    }
-    elsif ( $self->{tab_size} ) {
-        $indent_char = ' ' x $self->{tab_size};
-    }
-
     foreach my $idx ( 0 .. $#tokens ) {
         my $token      = uc $tokens[$idx];
         my $next_token = '';
@@ -545,8 +536,6 @@ sub add_indents {
             }
 
             my $indent_case = scalar @cases;
-            if ($indent_case) {
-            }
 
             # if the parens are non-balanced relative to the start
             # then we need to look to the last sub token for indenting. ???
@@ -579,10 +568,7 @@ sub add_indents {
                 $indent_sub = $h{$statement_type}{'other'};
             }
 
-            my $indent = '    ' x ( $indent_sub + $indent_parens + $indent_case );
-
-            my $use_tabs = ( defined $self->{use_tabs} ) ? $self->{use_tabs} : 'undef';
-            my $tab_size = ( defined $self->{tab_size} ) ? $self->{tab_size} : 'undef';
+            my $indent = $indenter->to_indent( $indent_sub + $indent_parens + $indent_case );
 
             push @new_tokens, "\n";
             #push @new_tokens, "-- " . join (', ', $indent_sub , $indent_parens , $indent_case, length($indent) );
