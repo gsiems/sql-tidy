@@ -20,6 +20,9 @@ Tag and untag comments
 
 =cut
 
+my $space_re;
+my $indenter;
+
 =item new
 
 Create, and return, a new instance of this
@@ -32,13 +35,8 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    foreach my $key ( keys %{$args} ) {
-        unless ( exists $args->{$key} ) {
-            $self->{$_} = $args->{$_};
-        }
-    }
-
-    $self->{indent} = SQL::Tidy::Indent->new($args);
+    $space_re = $args->{space_re};
+    $indenter = SQL::Tidy::Indent->new($args);
 
     return $self;
 }
@@ -71,8 +69,8 @@ sub tag_comments {
             $comments{$key}{comment} = $token;
             $comments{$key}{indent}  = 0;
 
-            if ( $idx and $tokens[ $idx - 1 ] =~ $self->{space_re} ) {
-                $comments{$key}{indent} = $self->{indent}->to_tab_count( $tokens[ $idx - 1 ] );
+            if ( $idx and $tokens[ $idx - 1 ] =~ $space_re ) {
+                $comments{$key}{indent} = $indenter->to_tab_count( $tokens[ $idx - 1 ] );
             }
             $token = $key;
         }
@@ -81,7 +79,7 @@ sub tag_comments {
             if ( $new_tokens[-1] eq "\n" ) {
                 $comments{$key}{newline_before} = 1;
             }
-            elsif ( $new_tokens[-1] and $new_tokens[-1] =~ $self->{space_re} and $new_tokens[-2] eq "\n" ) {
+            elsif ( $new_tokens[-1] and $new_tokens[-1] =~ $space_re and $new_tokens[-2] eq "\n" ) {
                 $comments{$key}{newline_before} = 1;
             }
             else {
@@ -95,7 +93,7 @@ sub tag_comments {
             elsif ( $tokens[ $idx + 1 ] eq "\n" ) {
                 $comments{$key}{newline_after} = 1;
             }
-            elsif ( $tokens[ $idx + 1 ] =~ $self->{space_re} and $tokens[ $idx + 2 ] eq "\n" ) {
+            elsif ( $tokens[ $idx + 1 ] =~ $space_re and $tokens[ $idx + 2 ] eq "\n" ) {
                 $comments{$key}{newline_after} = 1;
             }
             else {
@@ -133,8 +131,8 @@ sub untag_comments {
 
             my $prev_token = ($idx) ? $tokens[ $idx - 1 ] : '';
             my $curr_indent = 0;
-            if ( $prev_token =~ $self->{space_re} ) {
-                $curr_indent = $self->{indent}->to_tab_count($prev_token);
+            if ( $prev_token =~ $space_re ) {
+                $curr_indent = $indenter->to_tab_count($prev_token);
             }
 
             my $indent_diff = $curr_indent - $comments->{$token}{indent};
@@ -143,10 +141,10 @@ sub untag_comments {
                 # Increase the indent by the diff
                 my @ary = split "\n", $comment;
 
-                my $dint = $self->{indent}->to_indent($indent_diff);
+                my $dint = $indenter->to_indent($indent_diff);
 
                 foreach my $idx ( 1 .. $#ary ) {
-                    my $line = $self->{indent}->add_indents( $ary[$idx], $indent_diff );
+                    my $line = $indenter->add_indents( $ary[$idx], $indent_diff );
 
                     $line =~ s/ +$//;
                     $ary[$idx] = $line;
@@ -160,7 +158,7 @@ sub untag_comments {
                 $indent_diff = abs($indent_diff);
 
                 foreach my $idx ( 1 .. $#ary ) {
-                    my $line = $self->{indent}->subtract_indents( $ary[$idx], $indent_diff );
+                    my $line = $indenter->subtract_indents( $ary[$idx], $indent_diff );
                     $ary[$idx] = $line;
                 }
                 $comment = join "\n", @ary;
