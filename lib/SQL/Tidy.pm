@@ -27,6 +27,14 @@ SQL::Tidy
 
 =cut
 
+my $Tokenizer;
+my $Comment;
+my $String;
+my $dialect;
+my $DDL;
+my $DML;
+my $PL;
+
 =item new
 
 Create, and return, a new instance of this
@@ -70,13 +78,13 @@ sub new {
 
     $args->{space_re} = qr/^[ \t]+$/;
 
-    $self->{tokenizer} = SQL::Tidy::Tokenize->new($args);
-    $self->{comments}  = SQL::Tidy::Comment->new($args);
-    $self->{strings}   = SQL::Tidy::String->new($args);
-    $self->{dialect}   = SQL::Tidy::Dialect->new($args);
-    $self->{ddl}       = SQL::Tidy::DDL->new($args);
-    $self->{dmls}      = SQL::Tidy::DML->new($args);
-    $self->{pls}       = SQL::Tidy::PL->new($args);
+    $Tokenizer = SQL::Tidy::Tokenize->new($args);
+    $Comment   = SQL::Tidy::Comment->new($args);
+    $String    = SQL::Tidy::String->new($args);
+    $dialect   = SQL::Tidy::Dialect->new($args);
+    $DDL       = SQL::Tidy::DDL->new($args);
+    $DML       = SQL::Tidy::DML->new($args);
+    $PL        = SQL::Tidy::PL->new($args);
 
     return $self;
 }
@@ -94,32 +102,32 @@ sub tidy {
     my $strings;
     my $dml;
     my $pl;
-    my @tokens = $self->{tokenizer}->tokenize_sql($code);
+    my @tokens = $Tokenizer->tokenize_sql($code);
 
-    ( $comments, @tokens ) = $self->{comments}->tag_comments(@tokens);
-    ( $strings,  @tokens ) = $self->{strings}->tag_strings(@tokens);
+    ( $comments, @tokens ) = $Comment->tag_comments(@tokens);
+    ( $strings,  @tokens ) = $String->tag_strings(@tokens);
 
     @tokens = $self->normalize(@tokens);
-    ( $dml, @tokens ) = $self->{dmls}->tag_dml(@tokens);
+    ( $dml, @tokens ) = $DML->tag_dml(@tokens);
 
     # TODO: format pieces (to include unquoting identifiers/capitalizing key-words)
 
-    ( $pl, @tokens ) = $self->{pls}->tag_pl(@tokens);
+    ( $pl, @tokens ) = $PL->tag_pl(@tokens);
 
-    @tokens = $self->{ddl}->format_ddl( $comments, @tokens );
+    @tokens = $DDL->format_ddl( $comments, @tokens );
 
-    $pl = $self->{pls}->format_pl( $comments, $pl );
+    $pl = $PL->format_pl( $comments, $pl );
 
-    $dml = $self->{dmls}->format_dml( $comments, $dml );
+    $dml = $DML->format_dml( $comments, $dml );
 
-    @tokens = $self->{pls}->untag_pl( $pl, @tokens );
-    @tokens = $self->{dmls}->untag_dml( $dml, @tokens );
+    @tokens = $PL->untag_pl( $pl, @tokens );
+    @tokens = $DML->untag_dml( $dml, @tokens );
 
     # TODO: Fix line-wrapping here? Or as part of format DDL/DML/PL?
     @tokens = $self->fix_spacing(@tokens);
 
-    @tokens = $self->{strings}->untag_strings( $strings, @tokens );
-    @tokens = $self->{comments}->untag_comments( $comments, @tokens );
+    @tokens = $String->untag_strings( $strings, @tokens );
+    @tokens = $Comment->untag_comments( $comments, @tokens );
 
     # TODO: any cleanup?
 
