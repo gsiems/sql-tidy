@@ -28,12 +28,6 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    foreach my $key ( keys %{$args} ) {
-        unless ( exists $args->{$key} ) {
-            $self->{$_} = $args->{$_};
-        }
-    }
-
     return $self;
 }
 

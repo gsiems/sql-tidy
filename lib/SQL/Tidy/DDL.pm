@@ -16,6 +16,8 @@ SQL::Tidy::DDL
 
 =cut
 
+my $indenter;
+
 =item new
 
 Create, and return, a new instance of this
@@ -28,11 +30,7 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    foreach my $key ( keys %{$args} ) {
-        unless ( exists $args->{$key} ) {
-            $self->{$_} = $args->{$_};
-        }
-    }
+    $indenter = SQL::Tidy::Indent->new($args);
 
     return $self;
 }
