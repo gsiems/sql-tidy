@@ -5,6 +5,7 @@ use warnings FATAL => 'all';
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 
+use Getopt::Long;
 use SQL::Tidy;
 
 my $VERSION = '0.2';
