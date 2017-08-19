@@ -181,6 +181,8 @@ sub fix_spacing {
     unshift @new_tokens, '';
     push @new_tokens, '';
 
+    my %comp_operators = map { $_ => $_ } ( '=', '==', '>=', '<=', '>', '<', '<>', '!=' );
+
     foreach my $idx ( 1 .. $#new_tokens - 1 ) {
         my $token = $new_tokens[$idx];
 
@@ -204,7 +206,7 @@ sub fix_spacing {
         # '= +1', '> -1'.
         # '-3 >=' ???
         elsif ( $token =~ m/^[-+]$/
-            and exists $self->{operators}{ $new_tokens[ $idx - 2 ] }{comparison}
+            and exists $comp_operators{ $new_tokens[ $idx - 2 ] }
             and $new_tokens[ $idx + 2 ] =~ m/^[0-9.]/ )
         {
 
