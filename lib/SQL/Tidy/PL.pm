@@ -16,6 +16,10 @@ SQL::Tidy::PL
 
 =cut
 
+my $Dialect;
+my $indenter;
+my $space_re;
+
 =item new
 
 Create, and return, a new instance of this
@@ -27,6 +31,10 @@ sub new {
     my $class = ref($this) || $this;
     my $self = {};
     bless $self, $class;
+
+    $Dialect  = SQL::Tidy::Dialect->new($args);
+    $indenter = SQL::Tidy::Indent->new($args);
+    $space_re = $args->{space_re};
 
     return $self;
 }
@@ -43,18 +51,109 @@ Returns a hash-ref of the PL tags and the modified list of tokens.
 sub tag_pl {
     my ( $self, @tokens ) = @_;
 
-    my %pl;
+    # ASSERTIONS:
+    #   - The DML has already been tagged and bagged
+    #   - The DDL has not been tagged (and in fact requires the PL to be tagged first)
+    #   - ThE PL may be stand-alone or may be part of a CREATE/REPLACE statement
+    #   - No "spaces" tokens have been added yet
 
-    return ( \%pl, @tokens );
+    # Nota bene: The initial is very Oracle specific. It remains to be
+    #   seen if that can be extended for Postgres, etc. or if each
+    #   dialect gets a dialect specific tagger.
+    #
+    # Oracle:
+    #   CREATE ....
+    #   AS
+    #   ...
+    #   END ;
+    #   /
+
+    # Pg:
+    #   CREATE ....
+    #   AS $TAG$
+    #   ...
+    #   END ;
+    #   $TAG$ [language language_name ]
+
+    my %pl;
 
     my $pl_key;
     my @new_tokens;
-    my $is_grant = 0;
-    my $parens   = 0;
+    my $parens = 0;
+
+    my $is_ddl     = 0;
+    my $pl_type    = '';
+    my $ddl_header = '';
+    my $ddl_type   = '';
+
+    my $pl_dialect = 'Oracle';
 
     foreach my $idx ( 0 .. $#tokens ) {
 
-        my $token = $tokens[$idx];
+        next unless ( defined $tokens[$idx] );
+
+        my $token      = uc $tokens[$idx];
+        my $last_token = '';
+        if ( $idx > 0 and defined $tokens[ $idx - 1 ] ) {
+            $last_token = uc $tokens[ $idx - 1 ];
+        }
+
+        if ( $token eq '(' ) {
+            $parens++;
+        }
+        elsif ( $token eq ')' ) {
+            $parens--;
+        }
+
+        if ( $token eq 'CREATE' ) {
+            if ($ddl_type) {
+                # This would be a problem as either the tagging is
+                # deficient or the script is missing something.
+            }
+            $is_ddl     = 1;
+            $ddl_header = 'CREATE';
+        }
+        elsif ( $ddl_header eq 'CREATE' and $token =~ m/^(FUNCTION|PACKAGE|PROCEDURE|TRIGGER)$/ ) {
+            $ddl_header = $token;
+            $ddl_type   = $token;
+        }
+        elsif ( $ddl_header and $token eq ';' ) {
+            $ddl_header = '';    # Something like a Pg trigger?
+        }
+
+        if ($pl_key) {
+
+            # Very Oracle:
+            if ( $pl_dialect eq 'Oracle' ) {
+                if ( $token eq '/' and $last_token eq ';' ) {
+                    $pl_key   = '';
+                    $ddl_type = '';
+                }
+            }
+            # TODO: need non-Oracle
+        }
+        elsif ( $ddl_header and $ddl_type and $parens == 0 and $token =~ m/^(IS|AS)$/i ) {
+
+            $ddl_header = '';
+            $pl_key = '~~pl_' . sprintf( "%04d", $idx );
+            push @new_tokens, $tokens[$idx];
+            push @new_tokens, $pl_key;
+            $tokens[$idx] = undef;    # Don't push it twice
+        }
+        elsif ( $parens == 0 and $token =~ m/^(BEGIN|DECLARE)$/i ) {
+            $ddl_header = '';
+            $pl_key = '~~pl_' . sprintf( "%04d", $idx );
+            push @new_tokens, $pl_key;
+        }
+
+        if ( defined $tokens[$idx] ) {
+            if ($pl_key) {
+                push @{ $pl{$pl_key} }, $tokens[$idx];
+            }
+            else {
+                push @new_tokens, $tokens[$idx];
+            }
+        }
 
 =pod
 
@@ -132,14 +231,15 @@ Returns the modified list of tokens
 
 sub untag_pl {
     my ( $self, $pls, @tokens ) = @_;
-    return @tokens;
 
-    my @new_tokens = ('');
+    my @new_tokens;
 
     foreach my $idx ( 0 .. $#tokens ) {
         my $token = $tokens[$idx];
         if ( $token =~ m/^~~pl_/ ) {
+            push @new_tokens, "\n";
             push @new_tokens, @{ $pls->{$token} };
+            push @new_tokens, "\n";
         }
         else {
             push @new_tokens, $token;
@@ -154,8 +254,11 @@ sub format_pl {
 
     if ( $pls and ref($pls) eq 'HASH' ) {
         foreach my $key ( keys %{$pls} ) {
-            my @ary = $self->add_vspace( $comments, @{ $pls->{$key} } );
+            my @ary = @{ $pls->{$key} };
 
+            @ary = $self->unquote_identifiers(@ary);
+            @ary = $self->capitalize_keywords(@ary);
+            @ary = $self->add_vspace( $comments, @ary );
             @ary = $self->add_indents(@ary);
 
             $pls->{$key} = \@ary;
@@ -164,24 +267,183 @@ sub format_pl {
     return $pls;
 }
 
+sub capitalize_keywords {
+    my ( $self, @tokens ) = @_;
+    return @tokens;    # TODO remove me
+    my @new_tokens;
+
+    return @new_tokens;
+}
+
+sub unquote_identifiers {
+    my ( $self, @tokens ) = @_;
+    return @tokens;    # TODO remove me
+    my @new_tokens;
+
+    return @new_tokens;
+}
+
 sub add_vspace {
     my ( $self, $comments, @tokens ) = @_;
     my @new_tokens;
+    my @block_stack;
 
     foreach my $idx ( 0 .. $#tokens ) {
         my $token       = uc $tokens[$idx];
         my $line_before = 0;
         my $line_after  = 0;
 
-        if ( $token eq ';' ) {
-            $line_after = 1;
+        if ( $token eq 'DECLARE' ) {
+            $line_before = 1;
+            $line_after  = 1;
         }
-        elsif ( $token eq '/' ) {
-            $line_after = 1;
+        elsif ( $token eq 'BEGIN' ) {
+            push @block_stack, $token;
+            $line_before = 2;
+            $line_after  = 1;
         }
-        elsif ( $token =~ m/^~~comment_/i ) {
+        elsif ( $token eq 'EXCEPTION' or $token eq 'EXCEPTIONS' ) {
+            if ( $block_stack[-1] eq 'BEGIN' ) {
+                $block_stack[-1] = 'EXCEPTION';
+            }
+            $line_before = 2;
+        }
+        elsif ( $token eq 'RETURN' ) {
+            $line_before = 1;
+        }
+        elsif ( $token eq 'IF' ) {
+
+            # Ensure that this is the beginning of an IF block, not the end of one
+            foreach my $i ( 1 .. $#new_tokens ) {
+                my $lastok = $new_tokens[ -$i ];
+
+                next if ( $lastok =~ $space_re );
+                next if ( $lastok eq "\n" );
+                if ( $lastok ne 'END' ) {
+                    push @block_stack, $token;
+                    $line_before = 2;
+                }
+                last;
+            }
+        }
+        elsif ( $token eq 'CASE' ) {
+            push @block_stack, $token;
+            $line_before = 2;
+        }
+        elsif ( $token eq 'LOOP' ) {
+            # Ensure that this is the beginning of a LOOP block, not the end of one
+            foreach my $i ( 1 .. $#new_tokens ) {
+                my $lastok = $new_tokens[ -$i ];
+
+                next if ( $lastok =~ $space_re );
+                next if ( $lastok eq "\n" );
+                if ( $lastok ne 'END' ) {
+                    push @block_stack, $token;
+                    $line_after = 1;
+                }
+                last;
+            }
+        }
+        elsif ( $token =~ /^~~dml/i ) {
+            # TODO: single line only if the preceeding is 'IN ('
+            $line_before = 2;
+            #$line_after = 2;
+
+            foreach my $i ( 1 .. $#new_tokens ) {
+                my $lastok = $new_tokens[ -$i ];
+
+                next if ( $lastok =~ $space_re );
+                next if ( $lastok eq "\n" );
+                if ( $lastok eq '(' or $lastok eq 'IS' or $lastok eq 'AS' ) {
+                    $line_before = 1;
+                }
+                last;
+            }
+        }
+        elsif ( $token =~ m/^~~comment/i ) {
+            # TODO: If the comment is after an "END .., ;", and there
+            #   is a preceeding line-break then ensure the break is
+            #   double spaced.
+
             $line_before = $comments->{ lc $token }{newline_before};
             $line_after  = $comments->{ lc $token }{newline_after};
+        }
+        elsif ( $token eq 'END' ) {
+            # IF    -- END IF ;
+            # LOOP  -- END LOOP [label] ;
+            # CASE  -- END ;
+            # BEGIN -- END [ pl_name ] ;
+
+            $line_before = 1;
+            if (@block_stack) {
+
+                if ( $block_stack[-1] eq 'IF' ) {
+                    $line_before++;
+                }
+                pop @block_stack;
+            }
+
+            # TODO: maybe double space after an END as a general
+            #   principle and only single space on stacked ENDs
+        }
+        elsif ( $token eq 'THEN' ) {
+            if ( $block_stack[-1] eq 'IF' ) {
+                $line_after = 1;
+            }
+            elsif ( $block_stack[-1] eq 'EXCEPTION' ) {
+                $line_after = 1;
+            }
+        }
+        elsif ( $token eq 'ELSIF' ) {
+            $line_before = 2;
+        }
+        elsif ( $token eq 'ELSE' ) {
+            # ELSE behavior is context sensitive based on whether it is
+            #   part of an IF block or a CASE block.
+            if ( $block_stack[-1] eq 'IF' ) {
+                $line_before = 2;
+                $line_after  = 2;
+            }
+            elsif ( $block_stack[-1] eq 'CASE' ) {
+                $line_before = 1;
+            }
+        }
+        elsif ( $token eq 'WHEN' ) {
+            # WHEN behavior is context sensitive based on whether it is
+            #   part of a LOOP, CASE, or EXCEPTION block.
+
+            if ( $block_stack[-1] eq 'CASE' ) {
+                $line_before = 1;
+            }
+            elsif ( $block_stack[-1] eq 'EXCEPTION' ) {
+                $line_before = 1;
+            }
+        }
+        elsif ( $token eq ',' ) {
+            if ( $idx < $#tokens and $tokens[ $idx + 1 ] =~ /^~~comment/i ) {
+                $line_after = $comments->{ lc $token }{newline_before} || 0;
+            }
+        }
+        elsif ( $token eq ';' ) {
+            if ( $tokens[ $idx - 1 ] =~ /^~~dml/i ) {
+                $line_after = 2;
+            }
+            elsif ( $idx < $#tokens and $tokens[ $idx + 1 ] =~ /^~~comment/i ) {
+                $line_after = $comments->{ lc $token }{newline_before} || 0;
+            }
+            else {
+                $line_after = 1;
+                foreach my $i ( 1 .. $#new_tokens ) {
+                    my $lastok = $new_tokens[ -$i ];
+
+                    if ( $lastok eq 'END' ) {
+                        $line_after = 2;
+                    }
+                    elsif ( $lastok eq "\n" ) {
+                        last;
+                    }
+                }
+            }
         }
 
         if ( 0 == $idx ) {
@@ -191,34 +453,170 @@ sub add_vspace {
             $line_after = 0;
         }
 
-        # Leading new-line
-        if ( $line_before and $new_tokens[-1] ne "\n" ) {
-            push @new_tokens, "\n";
+        # trim trailing spaces
+        if ( $token eq "\n" or $line_before ) {
+            if ( $new_tokens[-1] =~ $space_re ) {
+                $new_tokens[-1] = '';
+            }
         }
 
-        push @new_tokens, $tokens[$idx];
+        ################################################################
+        # Adjust the leading new lines
+        if ( $line_before != 0 ) {
+            my $count = 0;
+            foreach my $i ( 1 .. $#new_tokens ) {
+                last if ( $new_tokens[ -$i ] ne "\n" );
+                $count++;
+            }
 
-        # Trailing new-line
-        if ($line_after) {
-            push @new_tokens, "\n";
+            if ( $line_before > 0 and $count < $line_before ) {
+                foreach ( $count .. $line_before - 1 ) {
+                    push @new_tokens, "\n";
+                }
+            }
         }
+
+        if ( $token ne "\n" and $token ne '' ) {
+            push @new_tokens, $tokens[$idx];
+        }
+
+        ################################################################
+        # Adjust the trailing new lines
+        if ( $line_after != 0 ) {
+            my $count = 0;
+            foreach my $i ( $idx .. $#tokens ) {
+                last if ( $tokens[$i] ne "\n" );
+                $count++;
+            }
+
+            if ( $line_after > 0 and $count < $line_after ) {
+                foreach ( $count .. $line_after - 1 ) {
+                    push @new_tokens, "\n";
+                }
+            }
+        }
+
     }
 
-    return @new_tokens;
+    return grep { $_ ne '' } @new_tokens;
 }
 
 sub add_indents {
     my ( $self, @tokens ) = @_;
     my @new_tokens;
+    my @block_stack;
+
+    my $parens = 0;
 
     foreach my $idx ( 0 .. $#tokens ) {
-        my $token = uc $tokens[$idx];
+        my $token      = uc $tokens[$idx];
+        my $next_token = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
+        my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
 
-        push @new_tokens, $tokens[$idx];
+        if ( $token eq '(' ) {
+            $parens++;
+        }
+        elsif ( $token eq ')' ) {
+            $parens--;
+        }
+        elsif ( $token eq 'BEGIN' ) {
+            push @block_stack, $token;
+        }
+        elsif ( $token eq 'CASE' ) {
+            push @block_stack, $token;
+        }
+        elsif ( $token eq 'IF' ) {
+            if ( $last_token ne 'END' ) {
+                push @block_stack, $token;
+            }
+        }
+        # TODO: LOOP
+        elsif ( $token eq 'EXCEPTION' or $token eq 'EXCEPTIONS' ) {
+            if ( @block_stack and $block_stack[-1] eq 'BEGIN' ) {
+                $block_stack[-1] = 'EXCEPTION';
+            }
+        }
+        elsif ( $token eq 'END' ) {
+            if (@block_stack) {
+                pop @block_stack;
+            }
+        }
 
+        ################################################################
+        if ( $token eq "\n" ) {
+
+            my $offset = 0;
+
+            if ( $next_token eq "\n" ) {
+
+            }
+            elsif ( $next_token eq 'BEGIN' ) {
+
+            }
+
+            elsif ( $next_token eq 'IF' ) {
+                # Not yet in an IF block
+
+            }
+            elsif ( $next_token eq 'CASE' ) {
+                # Not yet in a CASE block
+            }
+            elsif ( $next_token eq 'LOOP' ) {
+                # TODO: needs to be last_token?
+            }
+            elsif ( $next_token =~ /^~~dml/i ) {
+
+            }
+            elsif ( $next_token =~ m/^~~comment/i ) {
+
+            }
+            elsif ( $next_token eq 'END' ) {
+                if ( @block_stack and $block_stack[-1] eq 'EXCEPTION' ) {
+                    $offset -= 2;
+                }
+                else {
+                    $offset--;
+                }
+            }
+            elsif ( $next_token eq 'ELSIF' ) {
+                # In an IF block already
+                $offset = -1;
+            }
+            elsif ( $next_token eq 'ELSE' ) {
+                if ( $block_stack[-1] eq 'IF' ) {
+                    # In an IF block already
+                    $offset = -1;
+                }
+            }
+            elsif ( $next_token eq 'EXCEPTION' or $next_token eq 'EXCEPTIONS' ) {
+                $offset--;
+            }
+            elsif ( $next_token eq 'WHEN' ) {
+                if ( @block_stack and $block_stack[-1] eq 'EXCEPTION' ) {
+                    $offset--;
+                }
+            }
+            if ( @block_stack and $block_stack[-1] eq 'EXCEPTION' ) {
+                $offset++;
+            }
+
+            push @new_tokens, "\n";
+
+            if ( $next_token ne "\n" ) {
+                my $indent = $indenter->to_indent( scalar @block_stack + $parens + $offset );
+                #push @new_tokens, "-- " . join (', ', scalar @block_stack, $parens, $offset );
+                if ($indent) {
+                    push @new_tokens, $indent;
+                }
+            }
+
+        }
+        else {
+            push @new_tokens, $tokens[$idx];
+        }
     }
-
     return @new_tokens;
+
 }
 
 =back
