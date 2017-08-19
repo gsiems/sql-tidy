@@ -20,6 +20,7 @@ Tag and untag blocks of SQL queries (DML)
 
 =cut
 
+my $Dialect;
 my $indenter;
 my $space_re;
 
@@ -35,6 +36,7 @@ sub new {
     my $self = {};
     bless $self, $class;
 
+    $Dialect  = SQL::Tidy::Dialect->new($args);
     $indenter = SQL::Tidy::Indent->new($args);
     $space_re = $args->{space_re};
 
@@ -152,7 +154,10 @@ sub tag_sub_dml {
 
     foreach my $idx ( 0 .. $#tokens ) {
 
-        my $token = $tokens[$idx];
+        my $token       = $tokens[$idx];
+        my $next_token  = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
+        my $third_token = ( $idx + 1 < $#tokens ) ? uc $tokens[ $idx + 2 ] : '';
+        my $last_token  = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
 
         # Extract the DML blocks
         if ($dml_key) {
@@ -168,6 +173,11 @@ sub tag_sub_dml {
             }
             elsif ( $token eq ';' ) {
                 $dml_key = undef;
+            }
+            elsif ( $token eq 'WHEN' ) {
+                if ( $next_token eq 'MATCHED' or ( $next_token eq 'NOT' and $third_token eq 'MATCHED' ) ) {
+                    $dml_key = undef;
+                }
             }
         }
         elsif ( $idx > 0 and $token =~ m/^(WITH|SELECT|INSERT|UPDATE|DELETE|MERGE)$/i ) {
@@ -252,14 +262,33 @@ sub format_dml {
 
     if ( $dmls and ref($dmls) eq 'HASH' ) {
         foreach my $key ( keys %{$dmls} ) {
-            my @ary = $self->add_vspace( $comments, @{ $dmls->{$key} } );
+            my @ary = @{ $dmls->{$key} };
 
+            @ary = $self->unquote_identifiers(@ary);
+            @ary = $self->capitalize_keywords(@ary);
+            @ary = $self->add_vspace( $comments, @ary );
             @ary = $self->add_indents(@ary);
 
             $dmls->{$key} = \@ary;
         }
     }
     return $dmls;
+}
+
+sub capitalize_keywords {
+    my ( $self, @tokens ) = @_;
+    return @tokens;    # TODO remove me
+    my @new_tokens;
+
+    return @new_tokens;
+}
+
+sub unquote_identifiers {
+    my ( $self, @tokens ) = @_;
+    return @tokens;    # TODO remove me
+    my @new_tokens;
+
+    return @new_tokens;
 }
 
 =item add_vspace ( tokens )
@@ -279,7 +308,7 @@ sub add_vspace {
     my @cases;
 
     my %h = (
-        'WITH' => { 'Other' => 0 },
+        'WITH' => { 'OTHER' => 0 },
 
         'MERGE' => {
             'USING'  => 1,
@@ -288,6 +317,7 @@ sub add_vspace {
             'UPDATE' => 1,
             'INSERT' => 1,
             'WHERE'  => 1,
+            'OTHER'  => 2,
         },
         'SELECT' => {
             'INTO'      => 1,
@@ -307,7 +337,7 @@ sub add_vspace {
             'EXCEPT'    => 1,
             'MINUS'     => 1,
         },
-        'INSERT' => { 'VALUES' => 1, },
+        'INSERT' => { 'VALUES' => 1 },
         'UPDATE' => {
             'SET'    => 1,
             'FROM'   => 1,
@@ -333,6 +363,9 @@ sub add_vspace {
 
         if ( $token eq '(' ) {
             $parens++;
+            if ( $statement_type eq 'INSERT' and 1 == $parens ) {
+                $line_after = 1;
+            }
         }
         elsif ( $token eq ')' ) {
             $parens--;
@@ -384,6 +417,8 @@ sub add_vspace {
             if ( $test =~ m/^(RIGHT|LEFT|CROSS|FULL|NATURAL|INNER|OUTER|JOIN)$/i ) {
                 $test = 'JOIN';
             }
+
+            # TODO: the following does not deal correctly with CROSS JOINs as there is no ON or USING clause
             if ( $test ne $sub_clause and exists $h{$statement_type}{$test} ) {
                 $sub_clause  = $test;
                 $line_before = $h{$statement_type}{$test};
@@ -441,7 +476,7 @@ sub add_indents {
     my @sc;
 
     my %h = (
-        'WITH'  => { 'other' => 0, },
+        'WITH'  => { 'OTHER' => 0, },
         'MERGE' => {
             'USING'  => 1,
             'WHEN'   => 1,
@@ -450,7 +485,7 @@ sub add_indents {
             'SET'    => 2,
             'ON'     => 2,
             'WHERE'  => 1,
-            'other'  => 3,
+            'OTHER'  => 2,
         },
         'SELECT' => {
             'INTO' => 1,
@@ -470,7 +505,7 @@ sub add_indents {
             'ORDER'     => 1,
             'PARTITION' => 1,
             'PIVOT'     => 1,
-            'other'     => 2,
+            'OTHER'     => 2,
             'UNION'     => 0,
             'MINUS'     => 0,
             'EXCEPT'    => 0,
@@ -479,11 +514,12 @@ sub add_indents {
         },
         'INSERT' => {
             'VALUES' => 1,
-            'other'  => 3,
+            'OTHER'  => 1,
         },
         'UPDATE' => {
             'SET'   => 1,
             'WHERE' => 1,
+            'OTHER' => 2,
         },
         'DELETE' => { 'WHERE' => 1, },
     );
@@ -513,7 +549,7 @@ sub add_indents {
                 $last_sub_clause = $token;
             }
             else {
-                $last_sub_clause = 'other';
+                $last_sub_clause = 'OTHER';
             }
 
             if ( $token eq 'CASE' ) {
@@ -550,22 +586,22 @@ sub add_indents {
                 $sub_used  = 'last';
                 $sub_token = $last_sub_clause;
                 if ( $sub_token eq 'WHERE' ) {
-                    $sub_token = 'other';
+                    $sub_token = 'OTHER';
                 }
             }
             else {
                 $sub_token = $next_token;
                 $sub_used  = 'next';
                 if ( !exists $h{$statement_type}{$sub_token} ) {
-                    $sub_token = 'other';
+                    $sub_token = 'OTHER';
                 }
             }
 
             if ( exists $h{$statement_type}{$sub_token} ) {
                 $indent_sub = $h{$statement_type}{$sub_token};
             }
-            elsif ( exists $h{$statement_type}{'other'} ) {
-                $indent_sub = $h{$statement_type}{'other'};
+            elsif ( exists $h{$statement_type}{'OTHER'} ) {
+                $indent_sub = $h{$statement_type}{'OTHER'};
             }
 
             my $indent = $indenter->to_indent( $indent_sub + $indent_parens + $indent_case );
