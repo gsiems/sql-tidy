@@ -4,6 +4,7 @@ CREATE OR REPLACE FUNCTION testing.f_test1 (
     p_parm_3 varchar2 DEFAULT NULL )
 RETURN number
 IS
+
 ln_standard_id number ;
 ln_other_id number ;
 
