@@ -1,6 +1,7 @@
 DROP VIEW db_dashboard.v_temp_space ;
 
-CREATE VIEW db_dashboard.v_temp_space AS
+CREATE VIEW db_dashboard.v_temp_space
+AS
 SELECT b.tablespace,
         b.segfile AS seg_file_num,
         b.segblk AS seg_block_num,
