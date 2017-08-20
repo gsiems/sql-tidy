@@ -269,8 +269,21 @@ sub format_pl {
 
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
-    return @tokens;    # TODO remove me
     my @new_tokens;
+    my %keywords = $Dialect->pl_keywords();
+    my $stu_re   = $Dialect->safe_ident_re();
+
+    foreach my $token (@tokens) {
+
+        if ( exists $keywords{ uc $token } ) {
+            $token = $keywords{ uc $token }{word};
+        }
+        elsif ( $token =~ $stu_re ) {
+            $token = lc $token;
+        }
+
+        push @new_tokens, $token;
+    }
 
     return @new_tokens;
 }
