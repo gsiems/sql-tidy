@@ -266,7 +266,7 @@ sub format_dml {
         foreach my $key ( keys %{$dmls} ) {
             my @ary = @{ $dmls->{$key} };
 
-            #@ary = $self->unquote_identifiers(@ary);
+            @ary = $self->unquote_identifiers(@ary);
             @ary = $self->capitalize_keywords(@ary);
             @ary = $self->add_vspace( $comments, @ary );
             @ary = $self->add_indents(@ary);
@@ -349,13 +349,22 @@ sub unquote_identifiers {
 
         # Oracle: for '#' and '$' in identifiers
         elsif ( $token eq '#' or $token eq '$' ) {
-            if ( $new_tokens[-1] =~ m/^[a-z]/i ) {
-                $new_tokens[-1] .= $token;
-            }
-            if ( $next_token and $next_token =~ m/^[a-z0-9_]/i ) {
+            my $tmp = $token;
+
+            # Attempt to deal with the '#' or '$' being at the beginning/
+            #   end of the identifier. TODO: can the tokenizer be fixed to deal with this?
+            if ( $next_token and $next_token =~ m/^[a-z0-9_]/i and not exists $keywords{ uc $next_token } ) {
                 $tokens[ $idx + 1 ] = undef;
-                $new_tokens[-1] .= $next_token;
+                $tmp .= $next_token;
             }
+
+            if ( @new_tokens and $new_tokens[-1] =~ m/^[a-z]/i and not exists $keywords{ uc $new_tokens[-1] } ) {
+                $new_tokens[-1] .= $tmp;
+            }
+            else {
+                push @new_tokens, $tmp;
+            }
+
         }
 
         else {
