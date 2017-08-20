@@ -52,8 +52,21 @@ sub format_ddl {
 
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
-    return @tokens;    # TODO remove me
     my @new_tokens;
+    my %keywords = $Dialect->ddl_keywords();
+    my $stu_re   = $Dialect->safe_ident_re();
+
+    foreach my $token (@tokens) {
+
+        if ( exists $keywords{ uc $token } ) {
+            $token = $keywords{ uc $token }{word};
+        }
+        elsif ( $token =~ $stu_re ) {
+            $token = lc $token;
+        }
+
+        push @new_tokens, $token;
+    }
 
     return @new_tokens;
 }
@@ -136,6 +149,18 @@ sub add_vspace {
         elsif ( $token eq '/' ) {
             $line_after = 1;
         }
+        elsif ( $token eq 'CREATE' ) {
+            $line_before = 2;
+        }
+        elsif ( $token eq 'ALTER' ) {
+            $line_before = 2;
+        }
+        elsif ( $token eq 'DROP' ) {
+            $line_before = 2;
+        }
+        elsif ( $token eq 'COMMENT' ) {
+            $line_before = 2;
+        }
         elsif ( $token eq 'AS' ) {
             if ( $in_proc_sig and $parens == 0 ) {
                 $in_proc_sig = 0;
@@ -170,17 +195,42 @@ sub add_vspace {
             $line_after = 0;
         }
 
-        # Leading new-line
-        if ( $line_before and $new_tokens[-1] ne "\n" ) {
-            push @new_tokens, "\n";
+        ################################################################
+        # Adjust the leading new lines
+        if ( $line_before != 0 ) {
+            my $count = 0;
+            foreach my $i ( 1 .. $#new_tokens ) {
+                last if ( $new_tokens[ -$i ] ne "\n" );
+                $count++;
+            }
+
+            if ( $line_before > 0 and $count < $line_before ) {
+                foreach ( $count .. $line_before - 1 ) {
+                    push @new_tokens, "\n";
+                }
+            }
         }
 
-        push @new_tokens, $tokens[$idx];
-
-        # Trailing new-line
-        if ($line_after) {
-            push @new_tokens, "\n";
+        if ( $token ne "\n" and $token ne '' ) {
+            push @new_tokens, $tokens[$idx];
         }
+
+        ################################################################
+        # Adjust the trailing new lines
+        if ( $line_after != 0 ) {
+            my $count = 0;
+            foreach my $i ( $idx .. $#tokens ) {
+                last if ( $tokens[$i] ne "\n" );
+                $count++;
+            }
+
+            if ( $line_after > 0 and $count < $line_after ) {
+                foreach ( $count .. $line_after - 1 ) {
+                    push @new_tokens, "\n";
+                }
+            }
+        }
+
     }
 
     return @new_tokens;
