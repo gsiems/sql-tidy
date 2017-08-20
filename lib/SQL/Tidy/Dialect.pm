@@ -138,6 +138,7 @@ sub dml_keywords {
         ITERSECT
         JOIN
         LEFT
+        LIKE
         MATCHED
         MERGE
         MINUS
