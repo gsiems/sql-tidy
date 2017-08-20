@@ -1,4 +1,5 @@
-CREATE VIEW db_dashboard.v_blocking_locks AS
+CREATE VIEW db_dashboard.v_blocking_locks
+AS
 SELECT waiter.sid AS waiting_sid,
         waiter.serial AS waiting_serial,
         waiter.username AS waiting_user,

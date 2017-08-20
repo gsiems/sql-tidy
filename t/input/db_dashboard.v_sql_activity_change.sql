@@ -1,4 +1,5 @@
-CREATE VIEW db_dashboard.v_sql_activity_change AS
+CREATE VIEW db_dashboard.v_sql_activity_change
+AS
 SELECT DISTINCT coalesce ( c.username, sql.parsing_schema_name ) AS username,
         c.osuser,
         to_char ( cpd.polling_dt, 'YYYY-MM-DD HH24:MI:SS' ) AS curr_polling_dt,

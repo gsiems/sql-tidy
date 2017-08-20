@@ -23,7 +23,8 @@ CREATE VIEW db_dashboard.v_session_query_stat (
     physical_read_bytes,
     physical_write_requests,
     physical_write_bytes,
-    sql_text ) AS
+    sql_text )
+AS
 WITH tmp AS (
     SELECT b.saddr,
             sum ( b.used_bytes ) AS used_bytes

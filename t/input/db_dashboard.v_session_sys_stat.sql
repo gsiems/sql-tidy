@@ -1,7 +1,8 @@
 CREATE OR REPLACE FORCE VIEW db_dashboard.v_session_sys_stat (
     sid,
     name,
-    value ) AS
+    value )
+AS
 SELECT stat.sid,
         s.name,
         stat.value

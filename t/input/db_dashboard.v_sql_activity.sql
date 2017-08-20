@@ -1,4 +1,5 @@
-CREATE VIEW db_dashboard.v_sql_activity AS
+CREATE VIEW db_dashboard.v_sql_activity
+AS
 WITH a AS (
     SELECT sess.username,
             sess.osuser,

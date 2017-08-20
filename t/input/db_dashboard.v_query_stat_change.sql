@@ -1,4 +1,5 @@
-CREATE OR REPLACE VIEW db_dashboard.v_query_stat_change AS
+CREATE OR REPLACE VIEW db_dashboard.v_query_stat_change
+AS
 SELECT c.username,
         c.osuser,
         to_char ( cpd.polling_dt, 'YYYY-MM-DD HH24:MI:SS' ) AS curr_polling_dt,

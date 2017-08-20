@@ -1,4 +1,5 @@
-CREATE VIEW db_dashboard.v_session_temp_space AS
+CREATE VIEW db_dashboard.v_session_temp_space
+AS
 WITH tmp AS (
     SELECT b.session_addr,
             b.tablespace,
