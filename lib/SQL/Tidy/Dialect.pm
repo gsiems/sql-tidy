@@ -45,6 +45,201 @@ sub new {
     return $self;
 }
 
+sub safe_ident_re {
+    return qr /^[A-Za-z0-9_]+$/;
+}
+
+sub ddl_keywords {
+    my %words;
+
+    # TODO: Review reserved/not reserved. Oracle vs. Pg vs. Standard
+
+    foreach my $word (
+        qw(
+
+        CREATE
+        REPLACE
+        ALTER
+        DROP
+        OR
+        FORCE
+        VIEW
+        TABLE
+        TRIGGER
+        MATERIALIZED
+        PACKAGE
+        BODY
+        FUNCTION
+        PROCEDURE
+        INDEX
+        SEQUENCE
+        FOREIGN
+        KEY
+        PRIMARY
+        CONSTRAINT
+        UNIQUE
+        )
+        )
+    {
+
+        $words{ uc $word }{word}     = $word;
+        $words{ uc $word }{reserved} = 1;
+
+    }
+
+=pod
+    foreach my $word (
+        qw(
+
+        )
+        )
+    {
+
+        $words{ uc $word }{word} = $word;
+        $words{ uc $word }{reserved} = 0;
+
+    }
+=cut
+
+    return %words;
+}
+
+sub dml_keywords {
+    my %words;
+
+    # TODO: Review reserved/not reserved. Oracle vs. Pg vs. Standard
+
+    foreach my $word (
+        qw(
+
+        AND
+        AS
+        BETWEEN
+        BY
+        CASE
+        CAST
+        CROSS
+        DELETE
+        DISTINCT
+        ELSE
+        END
+        EXCEPT
+        FOR
+        FROM
+        FULL
+        GROUP
+        HAVING
+        IN
+        INNER
+        INSERT
+        INTERSECT
+        INTO
+        IS
+        ITERSECT
+        JOIN
+        LEFT
+        MATCHED
+        MERGE
+        MINUS
+        NATURAL
+        NOT
+        NULL
+        ON
+        OR
+        ORDER
+        OUTER
+        OVER
+        PARTITION
+        PIVOT
+        RIGHT
+        SELECT
+        SET
+        THEN
+        UNION
+        UPDATE
+        USING
+        VALUES
+        WHEN
+        WHERE
+        WITH
+
+        )
+        )
+    {
+
+        $words{ uc $word }{word}     = $word;
+        $words{ uc $word }{reserved} = 1;
+
+    }
+
+=pod
+    foreach my $word (
+        qw(
+
+        )
+        )
+    {
+
+        $words{ uc $word }{word} = $word;
+        $words{ uc $word }{reserved} = 0;
+
+    }
+=cut
+
+    return %words;
+}
+
+sub pl_keywords {
+    my %words;
+
+    # TODO: Review reserved/not reserved. Oracle vs. Pg vs. Standard
+
+    foreach my $word (
+        qw(
+
+        BEGIN
+        CASE
+        COMMIT
+        ELSE
+        ELSIF
+        END
+        EXCEPTION
+        EXIT
+        FETCH
+        FOR
+        IF
+        LOOP
+        RETURN
+        ROLLBACK
+        THEN
+        WHEN
+
+        )
+        )
+    {
+
+        $words{ uc $word }{word}     = $word;
+        $words{ uc $word }{reserved} = 1;
+
+    }
+
+=pod
+    foreach my $word (
+        qw(
+
+        )
+        )
+    {
+
+        $words{ uc $word }{word} = $word;
+        $words{ uc $word }{reserved} = 0;
+
+    }
+=cut
+
+    return %words;
+}
+
 =back
 
 =head1 Copyright (C) 2017 gsiems.
