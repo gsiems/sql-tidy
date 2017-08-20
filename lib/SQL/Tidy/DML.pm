@@ -23,6 +23,7 @@ Tag and untag blocks of SQL queries (DML)
 my $Dialect;
 my $indenter;
 my $space_re;
+my $case_folding;
 
 =item new
 
@@ -36,9 +37,10 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    $Dialect  = SQL::Tidy::Dialect->new($args);
-    $indenter = SQL::Tidy::Indent->new($args);
-    $space_re = $args->{space_re};
+    $Dialect      = SQL::Tidy::Dialect->new($args);
+    $indenter     = SQL::Tidy::Indent->new($args);
+    $space_re     = $args->{space_re};
+    $case_folding = $args->{case_folding} || 'upper';
 
     return $self;
 }
@@ -264,7 +266,7 @@ sub format_dml {
         foreach my $key ( keys %{$dmls} ) {
             my @ary = @{ $dmls->{$key} };
 
-            @ary = $self->unquote_identifiers(@ary);
+            #@ary = $self->unquote_identifiers(@ary);
             @ary = $self->capitalize_keywords(@ary);
             @ary = $self->add_vspace( $comments, @ary );
             @ary = $self->add_indents(@ary);
@@ -277,17 +279,89 @@ sub format_dml {
 
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
-    return @tokens;    # TODO remove me
     my @new_tokens;
+    my %keywords = $Dialect->dml_keywords();
+    my $stu_re   = $Dialect->safe_ident_re();
+
+    foreach my $token (@tokens) {
+
+        if ( exists $keywords{ uc $token } ) {
+            $token = $keywords{ uc $token }{word};
+        }
+        elsif ( $token =~ $stu_re ) {
+            $token = lc $token;
+        }
+
+        push @new_tokens, $token;
+    }
 
     return @new_tokens;
 }
 
 sub unquote_identifiers {
     my ( $self, @tokens ) = @_;
-    return @tokens;    # TODO remove me
     my @new_tokens;
 
+    my %keywords = $Dialect->dml_keywords();
+    my $stu_re   = $Dialect->safe_ident_re();
+
+    if ( $case_folding eq 'upper' or $case_folding eq 'lower' ) {
+
+        foreach my $token (@tokens) {
+            if ( $token =~ m/^"[A-Za-z0-9_\#\$]+"$/ ) {
+
+                # Something quoted this way comes...
+                my $tmp = $token;
+                $tmp =~ s/^"//;
+                $tmp =~ s/"$//;
+
+                if ( not exists $keywords{ uc $tmp } ) {
+                    $token = lc $tmp;
+                }
+            }
+            elsif ( not exists $keywords{ uc $token } ) {
+                $token = lc $token;
+            }
+        }
+    }
+
+    # Join identifiers "token.token" into token
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token = $tokens[$idx];
+        next unless ( defined $token );
+        my $next_token = ( $idx < $#tokens ) ? $tokens[ $idx + 1 ] : '';
+
+        # If the token is a dot '.' then join it and the next token to
+        # the previous token. This should account for instances of
+        # schema.table, table.column, schema.table.column, etc.
+        if ( $token eq '.' and $next_token and $next_token =~ m/^["a-z]/i ) {
+            $tokens[ $idx + 1 ] = undef;
+            $new_tokens[-1] .= '.' . $next_token;
+        }
+        elsif ( $token =~ m/^["a-z].+\.$/i and $next_token and $next_token =~ m/^["a-z]/i ) {
+            $tokens[ $idx + 1 ] = undef;
+            push @new_tokens, $token . $next_token;
+        }
+        # For Oracle DB-links
+        elsif ( $token =~ m/^[@]["a-z]/i ) {
+            $new_tokens[-1] .= $token;
+        }
+
+        # Oracle: for '#' and '$' in identifiers
+        elsif ( $token eq '#' or $token eq '$' ) {
+            if ( $new_tokens[-1] =~ m/^[a-z]/i ) {
+                $new_tokens[-1] .= $token;
+            }
+            if ( $next_token and $next_token =~ m/^[a-z0-9_]/i ) {
+                $tokens[ $idx + 1 ] = undef;
+                $new_tokens[-1] .= $next_token;
+            }
+        }
+
+        else {
+            push @new_tokens, $token;
+        }
+    }
     return @new_tokens;
 }
 
@@ -395,7 +469,7 @@ sub add_vspace {
         elsif ( $token eq 'AND' ) {
             $line_before = 1;
             # back-track new tokens looking for 'BETWEEN' in the current line
-            if ( scalar @new_tokens > 2 and $new_tokens[-2] eq 'BETWEEN' ) {
+            if ( scalar @new_tokens > 2 and uc $new_tokens[-2] eq 'BETWEEN' ) {
                 $line_before = 0;
             }
         }
@@ -418,11 +492,22 @@ sub add_vspace {
                 $test = 'JOIN';
             }
 
-            # TODO: the following does not deal correctly with CROSS JOINs as there is no ON or USING clause
-            if ( $test ne $sub_clause and exists $h{$statement_type}{$test} ) {
-                $sub_clause  = $test;
-                $line_before = $h{$statement_type}{$test};
+            if ( exists $h{$statement_type}{$test} ) {
+                if ( $test eq 'JOIN' ) {
+                    my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
+
+                    # Ensure that we aren't twigging on another part of the same join
+                    if ( $last_token !~ m/^(RIGHT|LEFT|CROSS|FULL|NATURAL|INNER|OUTER|JOIN)$/i ) {
+                        $sub_clause  = $test;
+                        $line_before = $h{$statement_type}{$test};
+                    }
+                }
+                else {
+                    $sub_clause  = $test;
+                    $line_before = $h{$statement_type}{$test};
+                }
             }
+
             if ( exists $h{$statement_type}{$test} ) {
                 $sub_clause = $test;
             }
