@@ -219,8 +219,6 @@ sub untag_dml {
         if ( $token =~ m/^~~dml_/ ) {
             my @ary = @{ $dmls->{$token} };
 
-            #($recurse) = grep { $_ =~ m/^~~dml_/ } @ary;
-
             # Determine the indent to add to each line base on the
             # indent of the dml tag
             my $indent = (@new_tokens) ? $new_tokens[-1] : '';
@@ -230,8 +228,13 @@ sub untag_dml {
                 foreach my $dml_idx ( 0 .. $#ary ) {
                     my $dml_tok = $ary[$dml_idx];
 
-                    if ( $dml_idx > 0 and $ary[ $dml_idx - 1 ] eq "\n" and $dml_tok =~ $space_re ) {
-                        $dml_tok = $indent . $dml_tok;
+                    if ( $dml_idx > 0 and $ary[ $dml_idx - 1 ] eq "\n" ) {
+                        if ( $dml_tok =~ $space_re ) {
+                            $dml_tok = $indent . $dml_tok;
+                        }
+                        else {
+                            push @new_tokens, $indent;
+                        }
                     }
                     push @new_tokens, $dml_tok;
                 }
@@ -658,6 +661,8 @@ sub add_indents {
         }
         elsif ( $token eq "\n" ) {
 
+            my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
+
             # Calculate the indents based on parens, case depth, the next token, etc.
 
             my $indent_parens = $parens;
@@ -683,6 +688,12 @@ sub add_indents {
                     $sub_token = 'OTHER';
                 }
             }
+            elsif ( $next_token =~ m/^~~dml/i and $last_token =~ m/^(UNION|MINUS|EXCEPT|INTERSECT)$/ ) {
+                # If ~~dml and previous is /^(UNION|MINUS|EXCEPT|INTERSECT)$/
+                # THEN indent same as the previous (UNION|MINUS|EXCEPT|INTERSECT)
+                $sub_used  = 'last';
+                $sub_token = $last_token;
+            }
             else {
                 $sub_token = $next_token;
                 $sub_used  = 'next';
@@ -701,7 +712,7 @@ sub add_indents {
             my $indent = $indenter->to_indent( $indent_sub + $indent_parens + $indent_case );
 
             push @new_tokens, "\n";
-            #push @new_tokens, "-- " . join (', ', $indent_sub , $indent_parens , $indent_case, length($indent) );
+            # push @new_tokens, "-- " . join (', ', $indent_sub , $indent_parens , $indent_case, length($indent) );
             push @new_tokens, $indent;
         }
 
