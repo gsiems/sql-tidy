@@ -33,6 +33,35 @@ sub new {
     return $self;
 }
 
+sub safe_ident_re {
+    return qr /[A-Za-z0-9_#\$]+/;
+}
+
+sub pct_attribs {
+
+    my %h;
+
+    foreach my $word (
+        qw(
+
+        BULK_ROWCOUNT
+        ROWTYPE
+        FOUND
+        NOTFOUND
+        TYPE
+        ISOPEN
+        ROWCOUNT
+        BULK_EXCEPTIONS
+
+        )
+        )
+    {
+        $h{ uc $word } = $word;
+    }
+
+    return %h;
+}
+
 =back
 
 =head1 Copyright (C) 2017 gsiems.
