@@ -2,7 +2,8 @@ package SQL::Tidy::DML;
 use strict;
 use warnings;
 
-use Data::Dumper;
+use SQL::Tidy::Dialect;
+use SQL::Tidy::Indent;
 
 =head1 NAME
 
@@ -257,7 +258,7 @@ sub untag_dml {
     return @new_tokens;
 }
 
-=item format_dml ()
+=item format_dml ( comments, dmls )
 
 
 =cut
@@ -280,6 +281,11 @@ sub format_dml {
     return $dmls;
 }
 
+=item capitalize_keywords ( tokens )
+
+
+=cut
+
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
     my @new_tokens;
@@ -300,6 +306,11 @@ sub capitalize_keywords {
 
     return @new_tokens;
 }
+
+=item unquote_identifiers ( tokens )
+
+
+=cut
 
 sub unquote_identifiers {
     my ( $self, @tokens ) = @_;
@@ -327,6 +338,8 @@ sub unquote_identifiers {
             }
         }
     }
+
+    my %pct_attribs = $Dialect->pct_attribs();
 
     # Join identifiers "token.token" into token
     foreach my $idx ( 0 .. $#tokens ) {
@@ -368,6 +381,19 @@ sub unquote_identifiers {
                 push @new_tokens, $tmp;
             }
 
+        }
+
+        elsif ( $token eq '%' and $idx < $#tokens ) {
+
+            if (@new_tokens) {
+                if ( exists $pct_attribs{$next_token} ) {
+                    $new_tokens[-1] .= $token . $tokens[ $idx + 1 ];
+                    $tokens[ $idx + 1 ] = undef;
+                }
+            }
+            else {
+                push @new_tokens, $token;
+            }
         }
 
         else {
@@ -585,10 +611,9 @@ sub add_indents {
             'OTHER'  => 2,
         },
         'SELECT' => {
-            'INTO' => 1,
-            'FROM' => 1,
-            'JOIN' => 1,
-
+            'INTO'      => 1,
+            'FROM'      => 1,
+            'JOIN'      => 1,
             'LEFT'      => 1,
             'RIGHT'     => 1,
             'INNER'     => 1,
@@ -712,18 +737,12 @@ sub add_indents {
             my $indent = $indenter->to_indent( $indent_sub + $indent_parens + $indent_case );
 
             push @new_tokens, "\n";
-            # push @new_tokens, "-- " . join (', ', $indent_sub , $indent_parens , $indent_case, length($indent) );
             push @new_tokens, $indent;
         }
-
-        # TODO:
 
         if ( defined $tokens[$idx] and $tokens[$idx] ne "\n" ) {
             push @new_tokens, $tokens[$idx];
         }
-
-        # TODO: post pushing adjustments?
-
     }
 
     @new_tokens = grep { $_ ne '' } @new_tokens;
