@@ -40,6 +40,20 @@ sub new {
     return $self;
 }
 
+=item indent_length ( string )
+
+Determine the "length" of an indent-- equivalent tab count * tab length
+
+=cut
+
+sub indent_length {
+    my ( $self, $string ) = @_;
+
+    my $tab_count = $self->to_tab_count($string);
+
+    return $tab_size * $tab_count;
+}
+
 =item to_indent ( tab_count )
 
 Convert an input number of tab-stops to the appropriate indentation (
