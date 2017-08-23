@@ -20,7 +20,7 @@ else {
     die "no input file specified\n";
 }
 
-my $tidy      = SQL::Tidy->new(%opts);
+my $tidy      = SQL::Tidy->new( \%opts );
 my $tidy_code = $tidy->tidy($source_code);
 
 if ( $opts{output_file} ) {
