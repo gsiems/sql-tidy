@@ -241,6 +241,24 @@ sub pl_keywords {
     return %words;
 }
 
+sub pct_attribs {
+    my %h;
+
+    foreach my $word (
+        qw(
+
+        ROWTYPE
+        TYPE
+
+        )
+        )
+    {
+        $h{ uc $word } = $word;
+    }
+
+    return %h;
+}
+
 =back
 
 =head1 Copyright (C) 2017 gsiems.
