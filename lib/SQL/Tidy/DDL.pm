@@ -2,6 +2,9 @@ package SQL::Tidy::DDL;
 use strict;
 use warnings;
 
+use SQL::Tidy::Dialect;
+use SQL::Tidy::Indent;
+
 =head1 NAME
 
 SQL::Tidy::DDL
