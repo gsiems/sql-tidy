@@ -15,8 +15,6 @@ use SQL::Tidy;
 # TODO: UTF-8 slurping
 # TODO: Set the engine according to the file name (ora_* vs. pg_* vs. neither (which should use the generic engine))
 
-my $tidy = SQL::Tidy->new();
-
 # Cleanup any previous failures
 `find failed -name "*.sql" -exec rm {} \\;`;
 
@@ -49,6 +47,18 @@ foreach my $source_file (@source_files) {
     else {
         $expected_code = $source_code;
     }
+
+    # Check filename to determine dialect to use
+    my ($filename) = ( split '/', $source_file )[-1];
+    my $dialect = 'Default';
+    if ( $filename =~ m/^pg_/i ) {
+        $dialect = 'Pg';
+    }
+    elsif ( $filename =~ m/^ora_/i ) {
+        $dialect = 'Oracle';
+    }
+
+    my $tidy = SQL::Tidy->new( { 'dialect' => $dialect } );
 
     my $tidy_code = $tidy->tidy($source_code);
 
