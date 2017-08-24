@@ -9,6 +9,7 @@ use SQL::Tidy::Comment;
 use SQL::Tidy::Type::DDL;
 use SQL::Tidy::Type::DML;
 use SQL::Tidy::Type::PL;
+use SQL::Tidy::Type::Priv;
 use SQL::Tidy::String;
 use SQL::Tidy::Tokenize;
 use SQL::Tidy::Wrap;
@@ -33,6 +34,7 @@ my $String;
 my $DDL;
 my $DML;
 my $PL;
+my $Priv;
 my $Wrapper;
 
 =item new
@@ -84,6 +86,7 @@ sub new {
     $DDL       = SQL::Tidy::Type::DDL->new($args);
     $DML       = SQL::Tidy::Type::DML->new($args);
     $PL        = SQL::Tidy::Type::PL->new($args);
+    $Priv      = SQL::Tidy::Type::Priv->new($args);
     $Wrapper   = SQL::Tidy::Wrap->new($args);
 
     return $self;
@@ -102,24 +105,27 @@ sub tidy {
     my $strings;
     my $dml;
     my $pl;
+    my $privs;
     my @tokens = $Tokenizer->tokenize_sql($code);
 
     ( $comments, @tokens ) = $Comment->tag_comments(@tokens);
     ( $strings,  @tokens ) = $String->tag_strings(@tokens);
 
     @tokens = $self->normalize(@tokens);
-    ( $dml, @tokens ) = $DML->tag(@tokens);
 
-    ( $pl, @tokens ) = $PL->tag(@tokens);
+    ( $privs, @tokens ) = $Priv->tag(@tokens);
+    ( $dml,   @tokens ) = $DML->tag(@tokens);
+    ( $pl,    @tokens ) = $PL->tag(@tokens);
 
     @tokens = $DDL->format_ddl( $comments, @tokens );
 
+    $privs = $Priv->format( $comments, $privs );
     $pl = $PL->format( $comments, $pl );
-
     $dml = $DML->format( $comments, $dml );
 
     @tokens = $PL->untag( $pl, @tokens );
     @tokens = $DML->untag( $dml, @tokens );
+    @tokens = $Priv->untag( $privs, @tokens );
 
     @tokens = $self->fix_spacing(@tokens);
 
