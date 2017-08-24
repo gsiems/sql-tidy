@@ -1,4 +1,5 @@
-package SQL::Tidy::DML;
+package SQL::Tidy::Type::DML;
+use base 'SQL::Tidy::Type';
 use strict;
 use warnings;
 
@@ -7,7 +8,7 @@ use SQL::Tidy::Indent;
 
 =head1 NAME
 
-SQL::Tidy::DML
+SQL::Tidy::Type::DML
 
 =head1 SYNOPSIS
 
@@ -46,7 +47,7 @@ sub new {
     return $self;
 }
 
-=item tag_dml ( tokens )
+=item tag ( tokens )
 
 Replaces SQL query statements (DML blocks as opposed to PL-code, etc.)
 with a tag and stores the original DML in a reference hash.
@@ -58,7 +59,7 @@ Returns a hash-ref of the DML tags and the modified list of tokens.
 
 =cut
 
-sub tag_dml {
+sub tag {
     my ( $self, @tokens ) = @_;
 
     my %dml;
@@ -211,7 +212,7 @@ Returns the modified list of tokens
 
 =cut
 
-sub untag_dml {
+sub untag {
     my ( $self, $dmls, @tokens ) = @_;
     my @new_tokens;
 
@@ -252,33 +253,10 @@ sub untag_dml {
 
     # Recursively untag sub queries
     if ( grep { $_ =~ m/^~~dml_/ } @new_tokens ) {
-        @new_tokens = $self->untag_dml( $dmls, @new_tokens );
+        @new_tokens = $self->untag( $dmls, @new_tokens );
     }
 
     return @new_tokens;
-}
-
-=item format_dml ( comments, dmls )
-
-
-=cut
-
-sub format_dml {
-    my ( $self, $comments, $dmls ) = @_;
-
-    if ( $dmls and ref($dmls) eq 'HASH' ) {
-        foreach my $key ( keys %{$dmls} ) {
-            my @ary = @{ $dmls->{$key} };
-
-            @ary = $self->unquote_identifiers(@ary);
-            @ary = $self->capitalize_keywords(@ary);
-            @ary = $self->add_vspace( $comments, @ary );
-            @ary = $self->add_indents(@ary);
-
-            $dmls->{$key} = \@ary;
-        }
-    }
-    return $dmls;
 }
 
 =item capitalize_keywords ( tokens )
@@ -595,7 +573,6 @@ sub add_indents {
     my $statement_type  = '';
     my $last_sub_clause = '';
     my @cases;
-
     my @sc;
 
     my %h = (
@@ -669,6 +646,7 @@ sub add_indents {
 
             if ( exists $h{$statement_type}{$token} ) {
                 $last_sub_clause = $token;
+                $sc[$parens] ||= $last_sub_clause;
             }
             else {
                 $last_sub_clause = 'OTHER';

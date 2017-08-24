@@ -1,4 +1,5 @@
-package SQL::Tidy::DDL;
+package SQL::Tidy::Type::DDL;
+use base 'SQL::Tidy::Type';
 use strict;
 use warnings;
 
@@ -7,7 +8,7 @@ use SQL::Tidy::Indent;
 
 =head1 NAME
 
-SQL::Tidy::DDL
+SQL::Tidy::Type::DDL
 
 =head1 SYNOPSIS
 
@@ -70,14 +71,6 @@ sub capitalize_keywords {
 
         push @new_tokens, $token;
     }
-
-    return @new_tokens;
-}
-
-sub unquote_identifiers {
-    my ( $self, @tokens ) = @_;
-    return @tokens;    # TODO remove me
-    my @new_tokens;
 
     return @new_tokens;
 }

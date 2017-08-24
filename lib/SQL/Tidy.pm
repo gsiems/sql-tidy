@@ -6,12 +6,12 @@ use Carp();
 use Data::Dumper;
 
 use SQL::Tidy::Comment;
-use SQL::Tidy::Dialect;
-use SQL::Tidy::DDL;
-use SQL::Tidy::DML;
-use SQL::Tidy::PL;
+use SQL::Tidy::Type::DDL;
+use SQL::Tidy::Type::DML;
+use SQL::Tidy::Type::PL;
 use SQL::Tidy::String;
 use SQL::Tidy::Tokenize;
+use SQL::Tidy::Wrap;
 
 =head1 NAME
 
@@ -30,10 +30,10 @@ SQL::Tidy
 my $Tokenizer;
 my $Comment;
 my $String;
-my $dialect;
 my $DDL;
 my $DML;
 my $PL;
+my $Wrapper;
 
 =item new
 
@@ -81,10 +81,10 @@ sub new {
     $Tokenizer = SQL::Tidy::Tokenize->new($args);
     $Comment   = SQL::Tidy::Comment->new($args);
     $String    = SQL::Tidy::String->new($args);
-    $dialect   = SQL::Tidy::Dialect->new($args);
-    $DDL       = SQL::Tidy::DDL->new($args);
-    $DML       = SQL::Tidy::DML->new($args);
-    $PL        = SQL::Tidy::PL->new($args);
+    $DDL       = SQL::Tidy::Type::DDL->new($args);
+    $DML       = SQL::Tidy::Type::DML->new($args);
+    $PL        = SQL::Tidy::Type::PL->new($args);
+    $Wrapper   = SQL::Tidy::Wrap->new($args);
 
     return $self;
 }
@@ -108,23 +108,22 @@ sub tidy {
     ( $strings,  @tokens ) = $String->tag_strings(@tokens);
 
     @tokens = $self->normalize(@tokens);
-    ( $dml, @tokens ) = $DML->tag_dml(@tokens);
+    ( $dml, @tokens ) = $DML->tag(@tokens);
 
-    # TODO: format pieces (to include unquoting identifiers/capitalizing key-words)
-
-    ( $pl, @tokens ) = $PL->tag_pl(@tokens);
+    ( $pl, @tokens ) = $PL->tag(@tokens);
 
     @tokens = $DDL->format_ddl( $comments, @tokens );
 
-    $pl = $PL->format_pl( $comments, $pl );
+    $pl = $PL->format( $comments, $pl );
 
-    $dml = $DML->format_dml( $comments, $dml );
+    $dml = $DML->format( $comments, $dml );
 
-    @tokens = $PL->untag_pl( $pl, @tokens );
-    @tokens = $DML->untag_dml( $dml, @tokens );
+    @tokens = $PL->untag( $pl, @tokens );
+    @tokens = $DML->untag( $dml, @tokens );
 
-    # TODO: Fix line-wrapping here? Or as part of format DDL/DML/PL?
     @tokens = $self->fix_spacing(@tokens);
+
+    @tokens = $Wrapper->wrap_lines( $strings, $comments, @tokens );
 
     @tokens = $String->untag_strings( $strings, @tokens );
     @tokens = $Comment->untag_comments( $comments, @tokens );
@@ -153,7 +152,8 @@ sub normalize {
     my ( $self, @tokens ) = @_;
     my @new_tokens;
 
-    foreach my $token (@tokens) {
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token = $tokens[$idx];
 
         if ( $token eq '' ) {
             # Remove empty tokens
@@ -164,6 +164,7 @@ sub normalize {
         elsif ( $token =~ m/^[ \t]+$/ ) {
             # Remove spaces
         }
+
         else {
             push @new_tokens, $token;
         }

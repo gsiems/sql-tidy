@@ -1,4 +1,5 @@
-package SQL::Tidy::PL;
+package SQL::Tidy::Type::PL;
+use base 'SQL::Tidy::Type';
 use strict;
 use warnings;
 
@@ -7,7 +8,7 @@ use SQL::Tidy::Indent;
 
 =head1 NAME
 
-SQL::Tidy::PL
+SQL::Tidy::Type::PL
 
 =head1 SYNOPSIS
 
@@ -44,7 +45,7 @@ sub new {
     return $self;
 }
 
-=item tag_pl ( tokens )
+=item tag ( tokens )
 
 Replaces PL/SQL or PL/PgSQL or whatever procedural blocks
 with a tag and stores the original PL in a reference hash.
@@ -53,7 +54,7 @@ Returns a hash-ref of the PL tags and the modified list of tokens.
 
 =cut
 
-sub tag_pl {
+sub tag {
     my ( $self, @tokens ) = @_;
 
     # ASSERTIONS:
@@ -226,7 +227,7 @@ CREATE FUNCTION ... AS <tag> ... <tag> [LANGUAGE lang] ;
     return ( \%pl, grep { $_ ne '' } @new_tokens );
 }
 
-=item untag_pl ( PL, tokens )
+=item untag ( PL, tokens )
 
 Takes the hash of PL tags and restores their value to the token list
 
@@ -234,7 +235,7 @@ Returns the modified list of tokens
 
 =cut
 
-sub untag_pl {
+sub untag {
     my ( $self, $pls, @tokens ) = @_;
 
     my @new_tokens;
@@ -252,24 +253,6 @@ sub untag_pl {
     }
 
     return @new_tokens;
-}
-
-sub format_pl {
-    my ( $self, $comments, $pls ) = @_;
-
-    if ( $pls and ref($pls) eq 'HASH' ) {
-        foreach my $key ( keys %{$pls} ) {
-            my @ary = @{ $pls->{$key} };
-
-            @ary = $self->unquote_identifiers(@ary);
-            @ary = $self->capitalize_keywords(@ary);
-            @ary = $self->add_vspace( $comments, @ary );
-            @ary = $self->add_indents(@ary);
-
-            $pls->{$key} = \@ary;
-        }
-    }
-    return $pls;
 }
 
 sub capitalize_keywords {
