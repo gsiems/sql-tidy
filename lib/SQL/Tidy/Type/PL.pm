@@ -278,94 +278,12 @@ sub capitalize_keywords {
 
 sub unquote_identifiers {
     my ( $self, @tokens ) = @_;
-    my @new_tokens;
 
     my %keywords    = $Dialect->pl_keywords();
     my $stu_re      = $Dialect->safe_ident_re();
     my %pct_attribs = $Dialect->pct_attribs();
 
-    if ( $case_folding eq 'upper' or $case_folding eq 'lower' ) {
-
-        foreach my $token (@tokens) {
-            if ( $token =~ m/^"[A-Za-z0-9_\#\$]+"$/ ) {
-
-                # Something quoted this way comes...
-                my $tmp = $token;
-                $tmp =~ s/^"//;
-                $tmp =~ s/"$//;
-
-                if ( not exists $keywords{ uc $tmp } ) {
-                    $token = lc $tmp;
-                }
-            }
-            elsif ( not exists $keywords{ uc $token } ) {
-                $token = lc $token;
-            }
-        }
-    }
-
-    # Join identifiers "token.token" into token
-    foreach my $idx ( 0 .. $#tokens ) {
-        my $token = $tokens[$idx];
-        next unless ( defined $token );
-        my $next_token = ( $idx < $#tokens ) ? $tokens[ $idx + 1 ] : '';
-
-        # If the token is a dot '.' then join it and the next token to
-        # the previous token. This should account for instances of
-        # schema.table, table.column, schema.table.column, etc.
-        if ( $token eq '.' and $next_token and $next_token =~ m/^["a-z]/i ) {
-            $tokens[ $idx + 1 ] = undef;
-            $new_tokens[-1] .= '.' . $next_token;
-        }
-        elsif ( $token =~ m/^["a-z].+\.$/i and $next_token and $next_token =~ m/^["a-z]/i ) {
-            $tokens[ $idx + 1 ] = undef;
-            push @new_tokens, $token . $next_token;
-        }
-        # For Oracle DB-links
-        elsif ( $token =~ m/^[@]["a-z]/i ) {
-            $new_tokens[-1] .= $token;
-        }
-
-        # Oracle: for '#' and '$' in identifiers
-        elsif ( $token eq '#' or $token eq '$' ) {
-            my $tmp = $token;
-
-            # Attempt to deal with the '#' or '$' being at the beginning/
-            #   end of the identifier. TODO: can the tokenizer be fixed to deal with this?
-            if ( $next_token and $next_token =~ m/^[a-z0-9_]/i and not exists $keywords{ uc $next_token } ) {
-                $tokens[ $idx + 1 ] = undef;
-                $tmp .= $next_token;
-            }
-
-            if ( @new_tokens and $new_tokens[-1] =~ m/^[a-z]/i and not exists $keywords{ uc $new_tokens[-1] } ) {
-                $new_tokens[-1] .= $tmp;
-            }
-            else {
-                push @new_tokens, $tmp;
-            }
-
-        }
-
-        elsif ( $token eq '%' and $idx < $#tokens ) {
-            if (@new_tokens) {
-                if ( exists $pct_attribs{ uc $next_token } ) {
-                    $new_tokens[-1] .= $token . $tokens[ $idx + 1 ];
-                    $tokens[ $idx + 1 ] = undef;
-                }
-                else {
-                    push @new_tokens, $token;
-                }
-            }
-            else {
-                push @new_tokens, $token;
-            }
-        }
-
-        else {
-            push @new_tokens, $token;
-        }
-    }
-    return @new_tokens;
+    return $self->_unquote_identifiers( \%keywords, \%pct_attribs, $stu_re, $case_folding, @tokens );
 }
 
 sub add_vspace {
