@@ -32,6 +32,10 @@ sub new {
     return $self;
 }
 
+sub dialect {
+    return 'Default';
+}
+
 =back
 
 =head1 Copyright (C) 2017 gsiems.

@@ -33,6 +33,10 @@ sub new {
     return $self;
 }
 
+sub dialect {
+    return 'Oracle';
+}
+
 sub safe_ident_re {
     return qr /[A-Za-z0-9_#\$]+/;
 }

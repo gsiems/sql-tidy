@@ -92,8 +92,6 @@ sub tag {
     my $ddl_header = '';
     my $ddl_type   = '';
 
-    my $pl_dialect = 'Oracle';
-
     foreach my $idx ( 0 .. $#tokens ) {
 
         next unless ( defined $tokens[$idx] );
@@ -130,7 +128,7 @@ sub tag {
         if ($pl_key) {
 
             # Very Oracle:
-            if ( $pl_dialect eq 'Oracle' ) {
+            if ( $Dialect->dialect() eq 'Oracle' ) {
                 if ( $token eq '/' and $last_token eq ';' ) {
                     $pl_key   = '';
                     $ddl_type = '';
