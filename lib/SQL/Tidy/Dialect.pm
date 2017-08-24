@@ -241,6 +241,37 @@ sub pl_keywords {
     return %words;
 }
 
+sub priv_keywords {
+    my %h;
+
+    foreach my $word (
+        qw(
+
+        GRANT
+        REVOKE
+        SELECT
+        INSERT
+        UPDATE
+        DELETE
+        REFERENCES
+        ALL
+        EXECUTE
+        ON
+        TO
+        FROM
+        WITH
+        GRANT
+        OPTION
+
+        )
+        )
+    {
+        $h{ uc $word } = $word;
+    }
+
+    return %h;
+}
+
 sub pct_attribs {
     my %h;
 
