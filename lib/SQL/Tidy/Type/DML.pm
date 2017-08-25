@@ -66,11 +66,15 @@ sub tag {
     my $dml_key;
     my @new_tokens;
     my $is_grant = 0;
+    my $is_pl    = '';
     my $parens   = 0;
 
     foreach my $idx ( 0 .. $#tokens ) {
 
         my $token = $tokens[$idx];
+        #my $next_token  = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
+        #my $third_token = ( $idx + 1 < $#tokens ) ? uc $tokens[ $idx + 2 ] : '';
+        my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
 
         # Extract the DML blocks
         if ($dml_key) {
@@ -88,7 +92,7 @@ sub tag {
                 $dml_key = undef;
             }
         }
-        elsif ( !$is_grant and $token =~ m/^(WITH|SELECT|INSERT|UPDATE|DELETE|MERGE)$/i ) {
+        elsif ( not $is_grant and not $is_pl and $token =~ m/^(WITH|SELECT|INSERT|UPDATE|DELETE|MERGE)$/i ) {
             # If the token is (WITH|SELECT|INSERT|UPDATE|DELETE|MERGE),
             # and we aren't already in a statement then it looks like
             # we are starting a statement.
@@ -106,14 +110,20 @@ sub tag {
 
         # Ensure that "GRANT ... TO user [WITH GRANT OPTION]" does not
         # get partially tagged as DML
+        # Also ensure that trigger definitions don't get caught either
         if ( $token eq 'GRANT' or $token eq 'REVOKE' ) {
             $is_grant = 1;
         }
-        elsif ( $token eq ';' ) {
-            if ($is_grant) {
-                $is_grant = 0;
-            }
+        elsif ( $token eq 'TRIGGER' ) {
+            $is_pl = $token;
         }
+        elsif ( $is_grant and $token eq ';' ) {
+            $is_grant = 0;
+        }
+        elsif ( $is_pl eq 'TRIGGER' and $token eq 'BEGIN' ) {
+            $is_pl = '';
+        }
+
     }
 
     my @key_queue = ( keys %dml );
@@ -266,23 +276,8 @@ sub untag {
 
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
-    my @new_tokens;
     my %keywords = $Dialect->dml_keywords();
-    my $stu_re   = $Dialect->safe_ident_re();
-
-    foreach my $token (@tokens) {
-
-        if ( exists $keywords{ uc $token } ) {
-            $token = $keywords{ uc $token }{word};
-        }
-        elsif ( $token =~ $stu_re ) {
-            $token = lc $token;
-        }
-
-        push @new_tokens, $token;
-    }
-
-    return @new_tokens;
+    return $self->_capitalize_keywords( \%keywords, @tokens );
 }
 
 =item unquote_identifiers ( tokens )
@@ -361,6 +356,15 @@ sub add_vspace {
         'DELETE' => { 'WHERE' => 1, },
     );
 
+=pod
+
+TODO: possibly a multi-pass approach:
+    pass 1: only line-break on new clause keywords where parens == 0
+    pass 2: with the first tokens in the new lines being the major sub-clause, add additional line-breaks on commas, parens, etc.
+    pass 3: ???
+
+=cut
+
     foreach my $idx ( 0 .. $#tokens ) {
         my $token       = uc $tokens[$idx];
         my $line_before = 0;
@@ -400,6 +404,9 @@ sub add_vspace {
         }
         elsif ( $token eq 'OR' ) {
             $line_before = 1;
+            if (@cases) {
+                $line_before = 0;
+            }
         }
         elsif ( $token eq 'AND' ) {
             $line_before = 1;
@@ -407,8 +414,14 @@ sub add_vspace {
             if ( scalar @new_tokens > 2 and uc $new_tokens[-2] eq 'BETWEEN' ) {
                 $line_before = 0;
             }
+            elsif (@cases) {
+                $line_before = 0;
+            }
         }
         # CASE ???
+        # TODO: if adding/subtracting the case, wrap before the +/-
+        # Maybe save the CASE for line-wrapping (nested cases?)
+
         elsif ( $token eq 'CASE' ) {
             push @cases, $token;
             $line_before = 1;
@@ -419,32 +432,41 @@ sub add_vspace {
                 pop @cases;
             }
         }
+
+        elsif ( $token eq 'GROUP' and @new_tokens and uc $new_tokens[-1] eq 'WITHIN' ) {
+            $line_before = 0;
+
+        }
         # TODO: vspace for other...
         else {
 
-            my $test = $token;
-            if ( $test =~ m/^(RIGHT|LEFT|CROSS|FULL|NATURAL|INNER|OUTER|JOIN)$/i ) {
-                $test = 'JOIN';
-            }
+            if ( $parens == 0 ) {
+                my $test = $token;
+                if ( $test =~ m/^(RIGHT|LEFT|CROSS|FULL|NATURAL|INNER|OUTER|JOIN)$/i ) {
+                    $test = 'JOIN';
+                }
 
-            if ( exists $h{$statement_type}{$test} ) {
-                if ( $test eq 'JOIN' ) {
-                    my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
+                # TODO: Fix the wrapping of FROM in EXTRACT ... FROM
 
-                    # Ensure that we aren't twigging on another part of the same join
-                    if ( $last_token !~ m/^(RIGHT|LEFT|CROSS|FULL|NATURAL|INNER|OUTER|JOIN)$/i ) {
+                if ( exists $h{$statement_type}{$test} ) {
+                    if ( $test eq 'JOIN' ) {
+                        my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
+
+                        # Ensure that we aren't twigging on another part of the same join
+                        if ( $last_token !~ m/^(RIGHT|LEFT|CROSS|FULL|NATURAL|INNER|OUTER|JOIN)$/i ) {
+                            $sub_clause  = $test;
+                            $line_before = $h{$statement_type}{$test};
+                        }
+                    }
+                    else {
                         $sub_clause  = $test;
                         $line_before = $h{$statement_type}{$test};
                     }
                 }
-                else {
-                    $sub_clause  = $test;
-                    $line_before = $h{$statement_type}{$test};
-                }
-            }
 
-            if ( exists $h{$statement_type}{$test} ) {
-                $sub_clause = $test;
+                if ( exists $h{$statement_type}{$test} ) {
+                    $sub_clause = $test;
+                }
             }
         }
 
@@ -539,7 +561,7 @@ sub add_indents {
             'WHERE' => 1,
             'OTHER' => 2,
         },
-        'DELETE' => { 'WHERE' => 1, },
+        'DELETE' => { 'WHERE' => 1, 'OTHER' => 2, },
     );
 
     foreach my $idx ( 0 .. $#tokens ) {
@@ -583,7 +605,8 @@ sub add_indents {
         }
         elsif ( $token eq "\n" ) {
 
-            my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
+            my $last_token      = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
+            my $next_last_token = ( $idx > 1 ) ? uc $tokens[ $idx - 2 ] : '';
 
             # Calculate the indents based on parens, case depth, the next token, etc.
 
@@ -593,6 +616,9 @@ sub add_indents {
             }
 
             my $indent_case = scalar @cases;
+            if ( @cases and ( uc $next_token eq 'AND' or uc $next_token eq 'OR' ) ) {
+                $indent_case++;
+            }
 
             # if the parens are non-balanced relative to the start
             # then we need to look to the last sub token for indenting. ???
@@ -603,20 +629,32 @@ sub add_indents {
             my $sub_used   = '';
             my $sub_token  = '';
             my $indent_sub = 0;
-            if ( $parens > 0 ) {
+            if ( $next_token =~ m/^~~dml/i or $next_token =~ m/^~~comment/i ) {
+                # If ~~dml and previous is /^(UNION|MINUS|EXCEPT|INTERSECT)$/
+                # THEN indent same as the previous (UNION|MINUS|EXCEPT|INTERSECT)
+                if ( $idx > 1 ) {
+                    foreach my $i ( 1 .. $#new_tokens ) {
+                        next if ( uc $new_tokens[ -$i ] eq "\n" );
+                        next if ( uc $new_tokens[ -$i ] eq '' );
+                        next if ( uc $new_tokens[ -$i ] =~ $space_re );
+                        next if ( $new_tokens[ -$i ] =~ m/^~~comment/i );
+                        if ( uc $new_tokens[ -$i ] =~ m/^(UNION|MINUS|EXCEPT|INTERSECT)$/i ) {
+                            $sub_used  = 'last';
+                            $sub_token = uc $new_tokens[ -$i ];
+                        }
+                        last;
+                    }
+                }
+            }
+            if ( not $sub_token and $parens > 0 ) {
                 $sub_used  = 'last';
                 $sub_token = $last_sub_clause;
                 if ( $sub_token eq 'WHERE' ) {
                     $sub_token = 'OTHER';
                 }
             }
-            elsif ( $next_token =~ m/^~~dml/i and $last_token =~ m/^(UNION|MINUS|EXCEPT|INTERSECT)$/ ) {
-                # If ~~dml and previous is /^(UNION|MINUS|EXCEPT|INTERSECT)$/
-                # THEN indent same as the previous (UNION|MINUS|EXCEPT|INTERSECT)
-                $sub_used  = 'last';
-                $sub_token = $last_token;
-            }
-            else {
+
+            if ( not $sub_token ) {
                 $sub_token = $next_token;
                 $sub_used  = 'next';
                 if ( !exists $h{$statement_type}{$sub_token} ) {
@@ -644,7 +682,122 @@ sub add_indents {
 
     @new_tokens = grep { $_ ne '' } @new_tokens;
 
-    return @new_tokens;
+    return $self->post_add_indents(@new_tokens);
+}
+
+sub post_add_indents {
+    my ( $self, @tokens ) = @_;
+
+    return @tokens unless (@tokens);
+
+    #use Data::Dumper;
+    #print STDERR "\n#######################################################\n";
+    #print STDERR Dumper \@tokens;
+
+    my @new_tokens;
+    my @line = ();
+
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token = $tokens[$idx];
+        push @line, $token;
+
+        if ( $token eq "\n" or $idx == $#tokens ) {
+            my $base_indent = '';
+            if ( @line and $line[0] =~ $space_re ) {
+                $base_indent = $line[0];
+            }
+
+            if ( scalar @line < 2 ) {
+                # too short to do anything with
+                push @new_tokens, @line;
+            }
+
+            # window functions with ( partition by, group by, order by, ... )
+            elsif ( grep { $_ =~ m/[^ ] +(PARTITION|GROUP|ORDER) +BY/i } join( ' ', @line ) ) {
+
+                my $parens = 0;
+
+                foreach my $idx ( 0 .. $#line ) {
+                    my $t = $line[$idx];
+
+                    if ( $t eq '(' ) {
+                        $parens++;
+                    }
+                    elsif ( $t eq ')' ) {
+                        $parens--;
+                    }
+
+                    # Note: skip the first to ensure we don't re-wrap anything we shouldn't
+                    if ( $idx > 1 and $idx + 1 < $#line ) {
+
+                        if ( uc $line[ $idx + 1 ] eq 'BY' ) {
+
+                            if ( $new_tokens[-1] eq ' ' ) {
+                                $new_tokens[-1] = undef;
+                            }
+                            my $offset = $parens;
+                            $offset ||= 1;
+                            push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+                        }
+                    }
+                    push @new_tokens, $t;
+                }
+            }
+            # CASE structures (except they can nest...)?
+
+            # PIVOT
+            elsif ( $line[1] eq 'PIVOT' ) {
+
+                my $parens  = 0;
+                my $did_for = 0;
+
+                foreach my $idx ( 0 .. $#line ) {
+                    my $t = $line[$idx];
+
+                    if ( $t eq '(' ) {
+                        $parens++;
+                    }
+                    elsif ( $t eq ')' ) {
+                        $parens--;
+                    }
+
+                    if ( $idx > 0 ) {
+
+                        if ( uc $line[$idx] eq 'FOR' ) {
+                            $did_for = 1;
+
+                            if ( $new_tokens[-1] eq ' ' ) {
+                                $new_tokens[-1] = undef;
+                            }
+                            my $offset = $parens;
+                            $offset ||= 1;
+                            push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+                        }
+                        elsif ( $did_for and ( $line[ $idx - 1 ] eq '(' or $line[ $idx - 1 ] eq ',' ) ) {
+
+                            if ( $new_tokens[-1] eq ' ' ) {
+                                $new_tokens[-1] = undef;
+                            }
+                            my $offset = $parens;
+                            $offset ||= 1;
+                            push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+                        }
+
+                    }
+                    push @new_tokens, $t;
+                }
+            }
+
+            else {
+                push @new_tokens, @line;
+            }
+            @line = ();
+        }
+    }
+
+    #print STDERR Dumper \@new_tokens;
+
+    return grep { defined $_ } @new_tokens;
 }
 
 =back
