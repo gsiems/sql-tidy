@@ -57,27 +57,48 @@ sub ddl_keywords {
     foreach my $word (
         qw(
 
-        CREATE
-        REPLACE
         ALTER
+        AS
+        BEFORE
+        BEGIN
+        BODY
+        COMMENT
+        CONSTRAINT
+        CREATE
+        DEFAULT
         DROP
-        OR
+        EACH
+        FOR
         FORCE
-        VIEW
+        FOREIGN
+        FUNCTION
+        INDEX
+        INSERT
+        INSTEAD
+        IS
+        KEY
+        MATERIALIZED
+        NEW
+        NOT
+        NULL
+        OF
+        OLD
+        ON
+        OR
+        PACKAGE
+        PRIMARY
+        PROCEDURE
+        REFERENCING
+        REPLACE
+        RETURN
+        ROW
+        SEQUENCE
         TABLE
         TRIGGER
-        MATERIALIZED
-        PACKAGE
-        BODY
-        FUNCTION
-        PROCEDURE
-        INDEX
-        SEQUENCE
-        FOREIGN
-        KEY
-        PRIMARY
-        CONSTRAINT
         UNIQUE
+        UPDATE
+        VIEW
+
         )
         )
     {
@@ -118,12 +139,14 @@ sub dml_keywords {
         BY
         CASE
         CAST
+        CONNECT
         CROSS
         DELETE
         DISTINCT
         ELSE
         END
         EXCEPT
+        EXISTS
         FOR
         FROM
         FULL
@@ -138,6 +161,7 @@ sub dml_keywords {
         ITERSECT
         JOIN
         LEFT
+        LEVEL
         LIKE
         MATCHED
         MERGE
@@ -152,9 +176,12 @@ sub dml_keywords {
         OVER
         PARTITION
         PIVOT
+        POSITION
+        PRIOR
         RIGHT
         SELECT
         SET
+        START
         THEN
         UNION
         UPDATE
@@ -198,9 +225,11 @@ sub pl_keywords {
     foreach my $word (
         qw(
 
+        AND
         BEGIN
         CASE
         COMMIT
+        DECLARE
         ELSE
         ELSIF
         END
@@ -210,10 +239,14 @@ sub pl_keywords {
         FOR
         IF
         LOOP
+        OR
         RETURN
         ROLLBACK
         THEN
         WHEN
+        IS
+        NULL
+        NOT
 
         )
         )
@@ -242,7 +275,7 @@ sub pl_keywords {
 }
 
 sub priv_keywords {
-    my %h;
+    my %words;
 
     foreach my $word (
         qw(
@@ -266,14 +299,16 @@ sub priv_keywords {
         )
         )
     {
-        $h{ uc $word } = $word;
+        $words{ uc $word }{word}     = $word;
+        $words{ uc $word }{reserved} = 1;
+
     }
 
-    return %h;
+    return %words;
 }
 
 sub pct_attribs {
-    my %h;
+    my %words;
 
     foreach my $word (
         qw(
@@ -284,10 +319,10 @@ sub pct_attribs {
         )
         )
     {
-        $h{ uc $word } = $word;
+        $words{ uc $word } = $word;
     }
 
-    return %h;
+    return %words;
 }
 
 =back
