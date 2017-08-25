@@ -47,6 +47,19 @@ sub new {
 
 sub wrap_lines {
     my ( $self, $strings, $comments, @tokens ) = @_;
+    my @new_tokens = @tokens;
+
+    foreach ( 0 .. 3 ) {
+        @new_tokens = $self->_wrap_lines( $strings, $comments, @new_tokens );
+    }
+
+    return @new_tokens;
+}
+
+sub _wrap_lines {
+    my ( $self, $strings, $comments, @tokens ) = @_;
+
+    # just in case recursion tanks
     my @new_tokens;
     my @line = ();
 
@@ -170,24 +183,25 @@ sub wrap_line {
         $base_indent = shift @tokens;
     }
     my $indent = $indenter->add_indents( $base_indent, $indent_by );
+    push @new_tokens, $base_indent;
 
     if (@tokens) {
         my $token   = uc $tokens[0];
         my $wrapped = 0;
 
-        if ( $token eq 'IF' or $token eq 'CASE' or $token eq 'WHEN' ) {
+        if ( not $wrapped and uc $tokens[0] eq 'IF' or uc $tokens[0] eq 'WHEN' ) {    # or $token eq 'CASE'
 
             # Only try splitting on THEN if it isn't the last token
             if ( ( grep { uc $_ eq 'THEN' } @tokens ) and uc $tokens[-1] ne 'THEN' ) {
                 # WHEN ... THEN ...
-                my @ary = ($base_indent);
+                my @ary;
                 while ( uc $tokens[0] ne 'THEN' ) {
                     my $t = shift @tokens;
                     push @ary, $t;
                 }
 
                 my $t = shift @tokens;
-                push @ary, $t;    # grab the 'THEN'
+                push @ary, $t;                                                        # grab the 'THEN'
 
                 my @ret = $self->wrap_line( 2, $strings, $comments, @ary );
                 push @new_tokens, @ret, "\n";
@@ -202,46 +216,44 @@ sub wrap_line {
                 $wrapped = 1;
             }
         }
-        elsif ( not $wrapped and join( ' ', @tokens ) =~ m/ +\((.+,){4}.+\)/i ) {
-            # We appear to have a " ( list, of, four or more, things )"
 
-            # TODO: How to deal with nested parens... or two sets of parens in the same line
-            # if '(' then "(", "\n", indent++
-            # if ',' then ",", "\n", indent
-            # if ')' then ")", "\n", indent--
-
+        if ( not $wrapped and grep { $_ =~ m/^(AND|OR)$/i } @tokens ) {
             my $parens = 0;
 
-            push @new_tokens, $base_indent;
-
             foreach my $t (@tokens) {
-                if ( scalar @new_tokens > 1 and $new_tokens[-2] eq "\n" ) {
-                    if ( $t !~ $space_re ) {
-                        push @new_tokens, $t;
-                    }
-                }
-                else {
-                    push @new_tokens, $t;
-                }
-
-                if ( $t eq ',' ) {
-                    push @new_tokens, "\n", $indent;
-                }
-                elsif ( $t eq '(' ) {
+                if ( $t eq '(' ) {
                     $parens++;
-                    $indent = $indenter->add_indents( $base_indent, $indent_by + $parens );
-                    push @new_tokens, "\n", $indent;
                 }
                 elsif ( $t eq ')' ) {
                     $parens--;
-                    $indent = $indenter->add_indents( $base_indent, $indent_by + $parens );
-                    # TODO: To wrap after the closing parens or not to wrap after the closing parens...
                 }
+                elsif ( $t =~ m/^(AND|OR)$/i ) {
+                    # If the parens is zero (not wanting to break up function calls, etc. if not needed
+                    # and it isn't part of a 'between x and y' thing
+
+                    if ( $parens == 0 ) {
+
+                        foreach my $i ( 1 .. $#new_tokens ) {
+                            my $lastok = $new_tokens[ -$i ];
+
+                            next if ( $lastok =~ $space_re );
+                            next if ( $lastok =~ /^~~comment/i );
+                            next if ( $lastok eq "\n" );
+                            if ( uc $lastok ne 'BETWEEN' ) {
+
+                                push @new_tokens, "\n", $indent;
+                                $wrapped = 1;
+                            }
+                            last;
+                        }
+
+                    }
+                }
+                push @new_tokens, $t;
             }
-            $wrapped = 1;
         }
-        elsif ( not $wrapped and grep { $_ eq '||' } @tokens ) {
-            push @new_tokens, $base_indent;
+
+        if ( not $wrapped and grep { $_ eq '||' } @tokens ) {
 
             foreach my $t (@tokens) {
 
@@ -261,8 +273,45 @@ sub wrap_line {
             $wrapped = 1;
         }
 
+        #      if ( not $wrapped and join( ' ', @tokens ) =~ m/ +\((.+,){4}.+\)/i ) {
+        #          # We appear to have a " ( list, of, four or more, things )"
+        #
+        #          # TODO: How to deal with nested parens... or two sets of parens in the same line
+        #          # if '(' then "(", "\n", indent++
+        #          # if ',' then ",", "\n", indent
+        #          # if ')' then ")", "\n", indent--
+        #
+        #          my $parens = 0;
+        #
+        #          foreach my $t (@tokens) {
+        #              if ( scalar @new_tokens > 1 and $new_tokens[-2] eq "\n" ) {
+        #                  if ( $t !~ $space_re ) {
+        #                      push @new_tokens, $t;
+        #                  }
+        #              }
+        #              else {
+        #                  push @new_tokens, $t;
+        #              }
+        #
+        #              if ( $t eq ',' ) {
+        #                  push @new_tokens, "\n", $indent;
+        #              }
+        #              elsif ( $t eq '(' ) {
+        #                  $parens++;
+        #                  $indent = $indenter->add_indents( $base_indent, $indent_by + $parens );
+        #                  push @new_tokens, "\n", $indent;
+        #              }
+        #              elsif ( $t eq ')' ) {
+        #                  $parens--;
+        #                  $indent = $indenter->add_indents( $base_indent, $indent_by + $parens );
+        #                  # TODO: To wrap after the closing parens or not to wrap after the closing parens...
+        #              }
+        #          }
+        #          $wrapped = 1;
+        #      }
+
         if ( not $wrapped ) {
-            push @new_tokens, $base_indent, @tokens;
+            push @new_tokens, @tokens;
         }
     }
 
