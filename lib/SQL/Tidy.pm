@@ -142,6 +142,11 @@ sub tidy {
     $code =~ s/RETURN - /RETURN -/g;
     $code =~ s/\( \)/()/g;
     $code =~ s/\( \* \)/(*)/g;
+    $code =~ s/;\n\n\//;\n\//g;
+    $code =~ s/\n*$/\n/;
+
+    # Pg casting
+    $code =~ s/ ::/::/g;
 
     return $code;
 }
@@ -208,6 +213,7 @@ sub fix_spacing {
             $new_tokens[ $idx - 1 ] = '';
             $new_tokens[ $idx + 1 ] = '';
         }
+
         # Comparisons
         # if it is a math operator combined with a number and comparison operator then what?
         # '= +1', '> -1'.
