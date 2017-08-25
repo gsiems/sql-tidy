@@ -86,6 +86,26 @@ sub capitalize_keywords {
     return @tokens;
 }
 
+sub _capitalize_keywords {
+    my ( $self, $keywords, @tokens ) = @_;
+    my @new_tokens;
+
+    foreach my $token (@tokens) {
+
+        if ( exists $keywords->{ uc $token } ) {
+            push @new_tokens, $keywords->{ uc $token }{word};
+        }
+        elsif ( $token =~ m/^[A-Za-z0-9_\#\$\.]+$/ ) {
+            push @new_tokens, lc $token;
+        }
+        else {
+            push @new_tokens, $token;
+        }
+    }
+
+    return @new_tokens;
+}
+
 sub unquote_identifiers {
     my ( $self, @tokens ) = @_;
     return @tokens;
