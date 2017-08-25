@@ -22,6 +22,8 @@ SQL::Tidy::Type::DDL
 
 my $Dialect;
 my $indenter;
+my $space_re;
+my $case_folding;
 
 =item new
 
@@ -35,8 +37,10 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    $Dialect  = SQL::Tidy::Dialect->new($args);
-    $indenter = SQL::Tidy::Indent->new($args);
+    $Dialect      = SQL::Tidy::Dialect->new($args);
+    $indenter     = SQL::Tidy::Indent->new($args);
+    $space_re     = $args->{space_re};
+    $case_folding = $args->{case_folding} || 'upper';
 
     return $self;
 }
@@ -48,31 +52,26 @@ sub format_ddl {
     @new_tokens = $self->unquote_identifiers(@new_tokens);
     @new_tokens = $self->capitalize_keywords(@new_tokens);
 
-    @new_tokens = $self->add_vspace( $comments, @tokens );
+    @new_tokens = $self->add_vspace( $comments, @new_tokens );
     @new_tokens = $self->add_indents(@new_tokens);
 
     return @new_tokens;
 }
 
+sub unquote_identifiers {
+    my ( $self, @tokens ) = @_;
+
+    my %keywords    = $Dialect->ddl_keywords();
+    my $stu_re      = $Dialect->safe_ident_re();
+    my %pct_attribs = $Dialect->pct_attribs();
+
+    return $self->_unquote_identifiers( \%keywords, \%pct_attribs, $stu_re, $case_folding, @tokens );
+}
+
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
-    my @new_tokens;
     my %keywords = $Dialect->ddl_keywords();
-    my $stu_re   = $Dialect->safe_ident_re();
-
-    foreach my $token (@tokens) {
-
-        if ( exists $keywords{ uc $token } ) {
-            $token = $keywords{ uc $token }{word};
-        }
-        elsif ( $token =~ $stu_re ) {
-            $token = lc $token;
-        }
-
-        push @new_tokens, $token;
-    }
-
-    return @new_tokens;
+    return $self->_capitalize_keywords( \%keywords, @tokens );
 }
 
 sub add_vspace {
@@ -103,8 +102,8 @@ sub add_vspace {
 
         # Force function/procedure signatures to line-wrap
         if ( $current eq 'CREATE' ) {
-            if ( $token eq 'FUNCTION' or $token eq 'PROCEDURE' ) {
-                $in_proc_sig = 1;
+            if ( $token eq 'FUNCTION' or $token eq 'PROCEDURE' or $token eq 'TRIGGER' ) {
+                $in_proc_sig = $token;
             }
             elsif ( $token eq 'VIEW' ) {
                 $in_view_sig = 1;
@@ -158,7 +157,7 @@ sub add_vspace {
             $line_before = 2;
         }
         elsif ( $token eq 'AS' ) {
-            if ( $in_proc_sig and $parens == 0 ) {
+            if ( $in_proc_sig and $in_proc_sig ne 'TRIGGER' and $parens == 0 ) {
                 $in_proc_sig = 0;
                 $line_before = 1;
                 $line_after  = 1;
@@ -170,7 +169,14 @@ sub add_vspace {
             }
         }
         elsif ( $token eq 'IS' ) {
-            if ( $in_proc_sig and $parens == 0 ) {
+            if ( $in_proc_sig and $in_proc_sig ne 'TRIGGER' and $parens == 0 ) {
+                $in_proc_sig = 0;
+                $line_before = 1;
+                $line_after  = 1;
+            }
+        }
+        elsif ( $token =~ m/^~~pl/i ) {
+            if ($in_proc_sig) {
                 $in_proc_sig = 0;
                 $line_before = 1;
                 $line_after  = 1;
@@ -182,6 +188,20 @@ sub add_vspace {
         elsif ( $token =~ m/^~~comment_/i ) {
             $line_before = $comments->{ lc $token }{newline_before};
             $line_after  = $comments->{ lc $token }{newline_after};
+        }
+
+        elsif ( $in_proc_sig eq 'TRIGGER' ) {
+            if ( $token eq 'REFERENCING' ) {
+                $line_before = 1;
+            }
+            elsif ( $token eq 'FOR' ) {
+                $line_before = 1;
+            }
+            elsif ( $token =~ m/^(BEFORE|AFTER|INSTEAD)$/i ) {
+                if ( @new_tokens and $new_tokens[-1] ne "\n" ) {
+                    $line_before = 1;
+                }
+            }
         }
 
         if ( 0 == $idx ) {
@@ -254,7 +274,15 @@ sub add_indents {
             push @new_tokens, "\n";
 
             if ( $next_token ne "\n" ) {
-                my $indent = $indenter->to_indent($parens);
+
+                # Oracle triggers
+                my $offset = 0;
+                if ( $Dialect->dialect() eq 'Oracle' ) {
+                    if ( $next_token =~ m/^(BEFORE|AFTER|INSTEAD|REFERENCING|FOR)$/ ) {
+                        $offset = 1;
+                    }
+                }
+                my $indent = $indenter->to_indent( $parens + $offset );
                 #push @new_tokens, "-- " . join (', ', scalar @block_stack, $parens, $offset );
                 if ($indent) {
                     push @new_tokens, $indent;
