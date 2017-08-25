@@ -690,10 +690,6 @@ sub post_add_indents {
 
     return @tokens unless (@tokens);
 
-    #use Data::Dumper;
-    #print STDERR "\n#######################################################\n";
-    #print STDERR Dumper \@tokens;
-
     my @new_tokens;
     my @line = ();
 
@@ -743,7 +739,11 @@ sub post_add_indents {
                     push @new_tokens, $t;
                 }
             }
-            # CASE structures (except they can nest...)?
+            # TODO: CASE structures (except they can nest...)?
+            # also, remember to deal with things like "blah, blah {+-*/} CASE ..."
+
+            # TODO: DECODE (which can also nest)?
+            # also, remember to deal with things like "blah, blah {+-*/} decode ..."
 
             # PIVOT
             elsif ( $line[1] eq 'PIVOT' ) {
@@ -794,8 +794,6 @@ sub post_add_indents {
             @line = ();
         }
     }
-
-    #print STDERR Dumper \@new_tokens;
 
     return grep { defined $_ } @new_tokens;
 }
