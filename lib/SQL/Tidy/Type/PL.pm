@@ -136,13 +136,18 @@ sub tag {
             }
             # TODO: need non-Oracle
         }
-        elsif ( $ddl_header and $ddl_type and $parens == 0 and $token =~ m/^(IS|AS)$/i ) {
+        elsif ( $ddl_header and $ddl_type and $ddl_type ne 'TRIGGER' and $parens == 0 and $token =~ m/^(IS|AS)$/i ) {
 
             $ddl_header = '';
             $pl_key = '~~pl_' . sprintf( "%04d", $idx );
             push @new_tokens, $tokens[$idx];
             push @new_tokens, $pl_key;
             $tokens[$idx] = undef;    # Don't push it twice
+        }
+        elsif ( $ddl_header and $ddl_type eq 'TRIGGER' and ( $token eq 'BEGIN' or $token eq 'DECLARE' ) ) {
+            $ddl_header = '';
+            $pl_key = '~~pl_' . sprintf( "%04d", $idx );
+            push @new_tokens, $pl_key;
         }
         elsif ( $parens == 0 and $token =~ m/^(BEGIN|DECLARE)$/i ) {
             $ddl_header = '';
@@ -243,7 +248,11 @@ sub untag {
         if ( $token =~ m/^~~pl_/ ) {
             push @new_tokens, "\n";
             push @new_tokens, @{ $pls->{$token} };
+
+            #if ($idx < $#tokens and $tokens[$idx] ne "\n"){
             push @new_tokens, "\n";
+            #}
+
         }
         else {
             push @new_tokens, $token;
@@ -255,23 +264,8 @@ sub untag {
 
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
-    my @new_tokens;
     my %keywords = $Dialect->pl_keywords();
-    my $stu_re   = $Dialect->safe_ident_re();
-
-    foreach my $token (@tokens) {
-
-        if ( exists $keywords{ uc $token } ) {
-            $token = $keywords{ uc $token }{word};
-        }
-        elsif ( $token =~ $stu_re ) {
-            $token = lc $token;
-        }
-
-        push @new_tokens, $token;
-    }
-
-    return @new_tokens;
+    return $self->_capitalize_keywords( \%keywords, @tokens );
 }
 
 sub unquote_identifiers {
@@ -532,6 +526,13 @@ sub add_indents {
             }
         }
         # TODO: LOOP
+
+        elsif ( $token eq 'LOOP' ) {
+            if ( $next_token eq "\n" ) {
+                push @block_stack, $token;
+            }
+        }
+
         elsif ( $token eq 'EXCEPTION' or $token eq 'EXCEPTIONS' ) {
             if ( @block_stack and $block_stack[-1] eq 'BEGIN' ) {
                 $block_stack[-1] = 'EXCEPTION';
