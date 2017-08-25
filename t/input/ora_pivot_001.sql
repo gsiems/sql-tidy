@@ -27,14 +27,14 @@ SELECT *
                         )
                     PIVOT ( max ( color_code )
                         FOR color_code IN (
-                                'BLACK' AS c_black,
-                                'BROWN' AS c_brown,
-                                'RED' AS c_red,
-                                'ORANGE' AS c_orange,
-                                'YELLOW' AS c_yellow,
-                                'GREEN' AS c_green,
-                                'BLUE' AS c_blue,
-                                'VIOLET' AS c_violet ) )
+                            'BLACK' AS c_black,
+                            'BROWN' AS c_brown,
+                            'RED' AS c_red,
+                            'ORANGE' AS c_orange,
+                            'YELLOW' AS c_yellow,
+                            'GREEN' AS c_green,
+                            'BLUE' AS c_blue,
+                            'VIOLET' AS c_violet ) )
                 ) piv
             INNER JOIN (
                 SELECT DISTINCT t1.id,
