@@ -150,7 +150,7 @@ sub subtract_indents {
     my ($indent) = $string =~ m/^([\t ]+)/;
     if ($indent) {
 
-        my $x;
+        my $x     = 0;
         my $count = 0;
         foreach my $token ( split '', $indent ) {
             if ( $token eq "\t" ) {
