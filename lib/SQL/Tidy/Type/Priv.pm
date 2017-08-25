@@ -66,7 +66,7 @@ sub tag {
                 $priv_key = undef;
             }
         }
-        elsif ( $token =~ m/^(GRANT|REVOKE)$/i ) {
+        elsif ( uc $token eq 'GRANT' or uc $token eq 'REVOKE' ) {
             $priv_key = '~~priv_' . sprintf( "%04d", $idx );
             push @new_tokens, $priv_key;
         }
@@ -79,7 +79,7 @@ sub tag {
         }
     }
 
-    return ( \%priv, @tokens );
+    return ( \%priv, @new_tokens );
 }
 
 =item untag ( privs, tokens )
@@ -97,9 +97,9 @@ sub untag {
     foreach my $idx ( 0 .. $#tokens ) {
         my $token = $tokens[$idx];
         if ( $token =~ m/^~~priv_/ ) {
-            push @new_tokens, "\n";
+            #push @new_tokens, "\n";
             push @new_tokens, @{ $privs->{$token} };
-            push @new_tokens, "\n";
+            #push @new_tokens, "\n";
         }
         else {
             push @new_tokens, $token;
@@ -121,23 +121,8 @@ sub unquote_identifiers {
 
 sub capitalize_keywords {
     my ( $self, @tokens ) = @_;
-    my @new_tokens;
     my %keywords = $Dialect->priv_keywords();
-    my $stu_re   = $Dialect->safe_ident_re();
-
-    foreach my $token (@tokens) {
-
-        if ( exists $keywords{ uc $token } ) {
-            $token = $keywords{ uc $token }{word};
-        }
-        elsif ( $token =~ $stu_re ) {
-            $token = lc $token;
-        }
-
-        push @new_tokens, $token;
-    }
-
-    return @new_tokens;
+    return $self->_capitalize_keywords( \%keywords, @tokens );
 }
 
 1;
