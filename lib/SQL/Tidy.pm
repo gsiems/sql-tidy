@@ -134,19 +134,19 @@ sub tidy {
     @tokens = $String->untag_strings( $strings, @tokens );
     @tokens = $Comment->untag_comments( $comments, @tokens );
 
-    # TODO: any cleanup?
-
     $code = join( '', @tokens );
 
     $code =~ s/^\n+//;
     $code =~ s/RETURN - /RETURN -/g;
-    $code =~ s/\( \)/()/g;
-    $code =~ s/\( \* \)/(*)/g;
     $code =~ s/;\n\n\//;\n\//g;
     $code =~ s/\n*$/\n/;
+    $code =~ s/ +\n/\n/;
 
     # Pg casting
     $code =~ s/ ::/::/g;
+
+    # PL/pgSQL
+    $code =~ s/AS\n+\$/AS \$/g;
 
     return $code;
 }
@@ -206,6 +206,21 @@ sub fix_spacing {
         # No spaces before commas
         elsif ( $token eq ',' ) {
             $new_tokens[ $idx - 1 ] = '';
+        }
+
+        # '( )' and '( * )'
+        elsif ( $token eq ')' ) {
+            if ( $new_tokens[ $idx - 2 ] eq '(' ) {
+                $new_tokens[ $idx - 1 ] = '';
+            }
+            elsif ( @new_tokens > 2 and $new_tokens[ $idx - 2 ] eq '*' ) {
+                $new_tokens[ $idx - 1 ] = '';
+            }
+        }
+        elsif ( $token eq '*' ) {
+            if ( @new_tokens > 2 and $new_tokens[ $idx - 2 ] eq '(' ) {
+                $new_tokens[ $idx - 1 ] = '';
+            }
         }
 
         # No spaces on either side of existing multiple-spaces
