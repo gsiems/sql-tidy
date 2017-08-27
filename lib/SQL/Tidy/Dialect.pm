@@ -66,6 +66,7 @@ sub ddl_keywords {
         CONSTRAINT
         CREATE
         DEFAULT
+        DEFINER
         DROP
         EACH
         FOR
@@ -77,6 +78,7 @@ sub ddl_keywords {
         INSTEAD
         IS
         KEY
+        LANGUAGE
         MATERIALIZED
         NEW
         NOT
@@ -85,15 +87,19 @@ sub ddl_keywords {
         OLD
         ON
         OR
+        OWNER
         PACKAGE
         PRIMARY
         PROCEDURE
         REFERENCING
         REPLACE
         RETURN
+        RETURNS
         ROW
+        SECURITY
         SEQUENCE
         TABLE
+        TO
         TRIGGER
         UNIQUE
         UPDATE
