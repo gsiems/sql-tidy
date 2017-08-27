@@ -17,7 +17,8 @@ SELECT current_database (),
         is_na
     FROM (
         SELECT ceil ( reltuples / ( ( bs - page_hdr ) / tpl_size ) ) + ceil ( toasttuples / 4 ) AS est_tblpages,
-                ceil ( reltuples / ( ( bs - page_hdr ) * fillfactor / ( tpl_size * 100 ) ) ) + ceil ( toasttuples / 4 ) AS est_tblpages_ff,
+                ceil ( reltuples / ( ( bs - page_hdr ) * fillfactor / ( tpl_size * 100 ) ) )
+                    + ceil ( toasttuples / 4 ) AS est_tblpages_ff,
                 tblpages,
                 fillfactor,
                 bs,
@@ -74,7 +75,9 @@ SELECT current_database (),
                                         WHEN tbl.relhasoids THEN 4
                                         ELSE 0
                                         END AS tpl_hdr_size,
-                                sum ( ( 1 - coalesce ( s.null_frac, 0 ) ) * coalesce ( s.avg_width, 1024 ) ) AS tpl_data_size,
+                                sum (
+                                    ( 1 - coalesce ( s.null_frac, 0 ) )
+                                    * coalesce ( s.avg_width, 1024 ) ) AS tpl_data_size,
                                 bool_or ( att.atttypid = 'pg_catalog.name'::regtype ) AS is_na
                             FROM pg_attribute AS att
                             JOIN pg_class AS tbl
