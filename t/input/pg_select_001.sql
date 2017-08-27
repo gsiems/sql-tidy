@@ -1,4 +1,3 @@
-
 SELECT current_database (),
         schemaname,
         tblname,
