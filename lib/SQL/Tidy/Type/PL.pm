@@ -91,6 +91,7 @@ sub tag {
     my $pl_type    = '';
     my $ddl_header = '';
     my $ddl_type   = '';
+    my $pl_terminator;
 
     foreach my $idx ( 0 .. $#tokens ) {
 
@@ -134,7 +135,12 @@ sub tag {
                     $ddl_type = '';
                 }
             }
-            # TODO: need non-Oracle
+
+            if ( $pl_terminator and $token eq $pl_terminator and $last_token eq ';' ) {
+                $pl_key        = '';
+                $ddl_type      = '';
+                $pl_terminator = undef;
+            }
         }
         elsif ( $ddl_header and $ddl_type and $ddl_type ne 'TRIGGER' and $parens == 0 and $token =~ m/^(IS|AS)$/i ) {
 
@@ -143,6 +149,14 @@ sub tag {
             push @new_tokens, $tokens[$idx];
             push @new_tokens, $pl_key;
             $tokens[$idx] = undef;    # Don't push it twice
+
+            # if the next token starts/ends with $ then it's a PL/pgSQL block
+            if ( $idx < $#tokens ) {
+                if ( $tokens[ $idx + 1 ] =~ m/\$.*\$/ ) {
+                    $pl_terminator = $tokens[ $idx + 1 ];
+                }
+            }
+
         }
         elsif ( $ddl_header and $ddl_type eq 'TRIGGER' and ( $token eq 'BEGIN' or $token eq 'DECLARE' ) ) {
             $ddl_header = '';
@@ -248,11 +262,7 @@ sub untag {
         if ( $token =~ m/^~~pl_/ ) {
             push @new_tokens, "\n";
             push @new_tokens, @{ $pls->{$token} };
-
-            #if ($idx < $#tokens and $tokens[$idx] ne "\n"){
             push @new_tokens, "\n";
-            #}
-
         }
         else {
             push @new_tokens, $token;
