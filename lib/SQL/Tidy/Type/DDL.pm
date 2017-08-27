@@ -83,12 +83,12 @@ sub add_vspace {
     my $current     = '';
 
     my %h = (
-        'CREATE'  => 1,
-        'ALTER'   => 1,
-        'DROP'    => 1,
-        'COMMENT' => 1,
-        'GRANT'   => 1,
-        'REVOKE'  => 1,
+        'CREATE'   => 2,
+        'ALTER'    => 2,
+        'DROP'     => 2,
+        'COMMENT'  => 2,
+        'SECURITY' => 1,
+        'LANGUAGE' => 1,
     );
 
     foreach my $idx ( 0 .. $#tokens ) {
@@ -110,7 +110,10 @@ sub add_vspace {
             }
         }
 
-        if ( $token eq '(' ) {
+        if ( exists $h{$token} ) {
+            $line_before = $h{$token};
+        }
+        elsif ( $token eq '(' ) {
             $parens++;
             if ( $in_proc_sig and $parens == 1 ) {
                 $line_after = 1;
@@ -144,18 +147,7 @@ sub add_vspace {
         elsif ( $token eq '/' ) {
             $line_after = 1;
         }
-        elsif ( $token eq 'CREATE' ) {
-            $line_before = 2;
-        }
-        elsif ( $token eq 'ALTER' ) {
-            $line_before = 2;
-        }
-        elsif ( $token eq 'DROP' ) {
-            $line_before = 2;
-        }
-        elsif ( $token eq 'COMMENT' ) {
-            $line_before = 2;
-        }
+
         elsif ( $token eq 'AS' ) {
             if ( $in_proc_sig and $in_proc_sig ne 'TRIGGER' and $parens == 0 ) {
                 $in_proc_sig = 0;
