@@ -109,6 +109,66 @@ sub untag {
     return @new_tokens;
 }
 
+sub add_vspace {
+    my ( $self, $comments, @tokens ) = @_;
+    my @new_tokens;
+
+    my %h = (
+        'GRANT'  => 1,
+        'REVOKE' => 1,
+    );
+
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token       = uc $tokens[$idx];
+        my $line_before = 0;
+        my $line_after  = 0;
+
+        # Force function/procedure signatures to line-wrap
+        if ( exists $h{$token} ) {
+            $line_before = $h{$token};
+        }
+
+        ################################################################
+        # Adjust the leading new lines
+        if ( $line_before != 0 ) {
+            my $count = 0;
+            foreach my $i ( 1 .. $#new_tokens ) {
+                last if ( $new_tokens[ -$i ] ne "\n" );
+                $count++;
+            }
+
+            if ( $line_before > 0 and $count < $line_before ) {
+                foreach ( $count .. $line_before - 1 ) {
+                    push @new_tokens, "\n";
+                }
+            }
+        }
+
+        if ( $token ne "\n" and $token ne '' ) {
+            push @new_tokens, $tokens[$idx];
+        }
+
+        ################################################################
+        # Adjust the trailing new lines
+        if ( $line_after != 0 ) {
+            my $count = 0;
+            foreach my $i ( $idx .. $#tokens ) {
+                last if ( $tokens[$i] ne "\n" );
+                $count++;
+            }
+
+            if ( $line_after > 0 and $count < $line_after ) {
+                foreach ( $count .. $line_after - 1 ) {
+                    push @new_tokens, "\n";
+                }
+            }
+        }
+
+    }
+
+    return @new_tokens;
+}
+
 sub unquote_identifiers {
     my ( $self, @tokens ) = @_;
 
