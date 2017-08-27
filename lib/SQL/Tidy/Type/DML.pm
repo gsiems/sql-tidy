@@ -5,6 +5,7 @@ use warnings;
 
 use SQL::Tidy::Dialect;
 use SQL::Tidy::Indent;
+use SQL::Tidy::Wrap;
 
 =head1 NAME
 
@@ -26,6 +27,7 @@ my $Dialect;
 my $indenter;
 my $space_re;
 my $case_folding;
+my $Wrapper;
 
 =item new
 
@@ -43,6 +45,7 @@ sub new {
     $indenter     = SQL::Tidy::Indent->new($args);
     $space_re     = $args->{space_re};
     $case_folding = $args->{case_folding} || 'upper';
+    $Wrapper      = SQL::Tidy::Wrap->new($args);
 
     return $self;
 }
@@ -707,88 +710,28 @@ sub post_add_indents {
                 # too short to do anything with
                 push @new_tokens, @line;
             }
-
             # window functions with ( partition by, group by, order by, ... )
             elsif ( grep { $_ =~ m/[^ ] +(PARTITION|GROUP|ORDER) +BY/i } join( ' ', @line ) ) {
-
-                my $parens = 0;
-
-                foreach my $idx ( 0 .. $#line ) {
-                    my $t = $line[$idx];
-
-                    if ( $t eq '(' ) {
-                        $parens++;
-                    }
-                    elsif ( $t eq ')' ) {
-                        $parens--;
-                    }
-
-                    # Note: skip the first to ensure we don't re-wrap anything we shouldn't
-                    if ( $idx > 1 and $idx + 1 < $#line ) {
-
-                        if ( uc $line[ $idx + 1 ] eq 'BY' ) {
-
-                            if ( $new_tokens[-1] eq ' ' ) {
-                                $new_tokens[-1] = undef;
-                            }
-                            my $offset = $parens;
-                            $offset ||= 1;
-                            push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
-                        }
-                    }
-                    push @new_tokens, $t;
-                }
+                push @new_tokens, $Wrapper->format_window_fcn(@line);
             }
-            # TODO: CASE structures (except they can nest...)?
-            # also, remember to deal with things like "blah, blah {+-*/} CASE ..."
-
-            # TODO: DECODE (which can also nest)?
-            # also, remember to deal with things like "blah, blah {+-*/} decode ..."
 
             # PIVOT
             elsif ( $line[1] eq 'PIVOT' ) {
-
-                my $parens  = 0;
-                my $did_for = 0;
-
-                foreach my $idx ( 0 .. $#line ) {
-                    my $t = $line[$idx];
-
-                    if ( $t eq '(' ) {
-                        $parens++;
-                    }
-                    elsif ( $t eq ')' ) {
-                        $parens--;
-                    }
-
-                    if ( $idx > 0 ) {
-
-                        if ( uc $line[$idx] eq 'FOR' ) {
-                            $did_for = 1;
-
-                            if ( $new_tokens[-1] eq ' ' ) {
-                                $new_tokens[-1] = undef;
-                            }
-                            my $offset = $parens;
-                            $offset ||= 1;
-                            push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
-                        }
-                        elsif ( $did_for and ( $line[ $idx - 1 ] eq '(' or $line[ $idx - 1 ] eq ',' ) ) {
-
-                            if ( $new_tokens[-1] eq ' ' ) {
-                                $new_tokens[-1] = undef;
-                            }
-                            my $offset = $parens;
-                            $offset ||= 1;
-                            push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
-                        }
-
-                    }
-                    push @new_tokens, $t;
-                }
+                push @new_tokens, $Wrapper->format_pivot(@line);
             }
-
             else {
+
+                # TODO: CASE structures (except they can nest...)?
+                # also, remember to deal with things like "blah, blah {+-*/} CASE ..."
+
+                if ( $Wrapper->find_first( 'CASE', @line ) ) {
+                    @line = $Wrapper->format_case(@line);
+                }
+
+                if ( $Wrapper->find_first( 'DECODE', @line ) ) {
+                    @line = $Wrapper->format_decode(@line);
+                }
+
                 push @new_tokens, @line;
             }
             @line = ();
