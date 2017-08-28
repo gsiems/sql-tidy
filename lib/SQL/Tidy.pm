@@ -140,7 +140,7 @@ sub tidy {
     $code =~ s/RETURN - /RETURN -/g;
     $code =~ s/;\n\n\//;\n\//g;
     $code =~ s/\n*$/\n/;
-    $code =~ s/ +\n/\n/;
+    $code =~ s/ +\n/\n/g;
 
     # Pg casting
     $code =~ s/ ::/::/g;
