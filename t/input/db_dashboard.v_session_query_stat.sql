@@ -69,8 +69,7 @@ q AS (
     -- want duplicates. We may also want to know current vs. previous.
     -- Using CASE vs. coalesce as we don't want to mix and match between
     -- prev and current.
-    SELECT
-            CASE
+    SELECT CASE
                 WHEN curr.saddr IS NOT NULL THEN curr.saddr
                 ELSE prev.saddr
                 END AS saddr,
