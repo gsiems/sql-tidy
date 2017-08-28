@@ -421,20 +421,6 @@ TODO: possibly a multi-pass approach:
                 $line_before = 0;
             }
         }
-        # CASE ???
-        # TODO: if adding/subtracting the case, wrap before the +/-
-        # Maybe save the CASE for line-wrapping (nested cases?)
-
-        elsif ( $token eq 'CASE' ) {
-            push @cases, $token;
-            $line_before = 1;
-        }
-        elsif ( @cases and ( $token eq 'WHEN' or $token eq 'ELSE' or $token eq 'END' ) ) {
-            $line_before = 1;
-            if ( $token eq 'END' ) {
-                pop @cases;
-            }
-        }
 
         elsif ( $token eq 'GROUP' and @new_tokens and uc $new_tokens[-1] eq 'WITHIN' ) {
             $line_before = 0;
@@ -473,10 +459,16 @@ TODO: possibly a multi-pass approach:
             }
         }
 
+        # Track whether or not we are in a case structure as we don't
+        # currently want to wrap on booleans within the case.
+        if ( $token eq 'CASE' ) {
+            push @cases, $token;
+        }
+        elsif ( @cases and $token eq 'END' ) {
+            pop @cases;
+        }
+
         ################################################################
-        #if (0 == $idx) {
-        #    $line_before = 0
-        #}
         if ( $#tokens == $idx ) {
             $line_after = 0;
         }
@@ -698,6 +690,7 @@ sub post_add_indents {
 
     foreach my $idx ( 0 .. $#tokens ) {
         my $token = $tokens[$idx];
+
         push @line, $token;
 
         if ( $token eq "\n" or $idx == $#tokens ) {
@@ -717,25 +710,271 @@ sub post_add_indents {
 
             # PIVOT
             elsif ( $line[1] eq 'PIVOT' ) {
-                push @new_tokens, $Wrapper->format_pivot(@line);
+                push @new_tokens, $self->format_pivot(@line);
             }
             else {
 
-                # TODO: CASE structures (except they can nest...)?
-                # also, remember to deal with things like "blah, blah {+-*/} CASE ..."
-
                 if ( $Wrapper->find_first( 'CASE', @line ) ) {
-                    @line = $Wrapper->format_case(@line);
+                    @line = $self->format_case(@line);
                 }
 
                 if ( $Wrapper->find_first( 'DECODE', @line ) ) {
-                    @line = $Wrapper->format_decode(@line);
+                    @line = $self->format_decode(@line);
                 }
 
                 push @new_tokens, @line;
             }
+
             @line = ();
         }
+    }
+
+    return grep { defined $_ } @new_tokens;
+}
+
+sub format_pivot {
+    my ( $self, @line ) = @_;
+
+    return @line unless (@line);
+
+    my @new_tokens;
+    my $parens  = 0;
+    my $did_for = 0;
+
+    my $base_indent = '';
+    if ( @line and $line[0] =~ $space_re ) {
+        $base_indent = $line[0];
+    }
+
+    foreach my $idx ( 0 .. $#line ) {
+        my $token = $line[$idx];
+
+        if ( $token eq '(' ) {
+            $parens++;
+        }
+        elsif ( $token eq ')' ) {
+            $parens--;
+        }
+
+        if ( $idx > 0 ) {
+
+            if ( uc $line[$idx] eq 'FOR' ) {
+                $did_for = 1;
+
+                if ( $new_tokens[-1] eq ' ' ) {
+                    $new_tokens[-1] = undef;
+                }
+                my $offset = $parens;
+                $offset ||= 1;
+                push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+            }
+            elsif ( $did_for and ( $line[ $idx - 1 ] eq '(' or $line[ $idx - 1 ] eq ',' ) ) {
+
+                if ( $new_tokens[-1] eq ' ' ) {
+                    $new_tokens[-1] = undef;
+                }
+                my $offset = $parens;
+                $offset ||= 1;
+                push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+            }
+        }
+        push @new_tokens, $token;
+    }
+
+    return grep { defined $_ } @new_tokens;
+}
+
+sub format_case {
+    my ( $self, @line ) = @_;
+
+    return @line unless (@line);
+
+    my @new_tokens;
+    my $parens      = 0;
+    my $cases       = 0;
+    my $case_offset = 0;
+    my $stmt_offset = 0;
+
+    my %wrap_before = map { $_ => 1 } ( '+', '-', '*', '/', '||' );
+    my %indents = map { $_ => 2 } (qw(SELECT WHERE));
+
+    my $base_indent = '';
+    if ( @line and $line[0] =~ $space_re ) {
+        $base_indent = $line[0];
+    }
+
+    foreach my $idx ( 0 .. $#line ) {
+        my $token = $line[$idx];
+        my $last_token = ( $idx > 0 ) ? $line[ $idx - 1 ] : '';
+
+        if ( uc $token eq '(' ) {
+            $parens++;
+        }
+        elsif ( uc $token eq ')' ) {
+            $parens--;
+        }
+        elsif ( uc $token eq 'CASE' ) {
+            # If the CASE is the leading token then do nothing, otherwise
+            # indent by base_indent + parens + cases + case_offset
+            # If the last token is a math or concatenation operator then
+            # indent before the last token (unless we've already indented before the operator).
+
+            if ( exists $indents{ uc $line[0] } ) {
+                $stmt_offset = $indents{ uc $line[0] };
+            }
+            elsif ( $line[0] =~ $space_re and exists $indents{ uc $line[1] } ) {
+                $stmt_offset = $indents{ uc $line[1] };
+            }
+
+            if ( $idx == 0 or ( $idx == 1 and $last_token =~ $space_re ) ) {
+                # Do nothing
+            }
+            elsif ( $idx > 0 and exists $wrap_before{ $new_tokens[-1] } ) {
+                if ( $idx > 1 and $new_tokens[-2] =~ $space_re ) {
+                    # Dont re-wrap...
+                }
+                else {
+                    $case_offset = 1;
+                    my $temp = $new_tokens[-1];
+                    $new_tokens[-1] = undef;
+                    push @new_tokens, "\n",
+                        $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
+                    push @new_tokens, $temp;
+                }
+            }
+            elsif ( $last_token eq '(' ) {
+                push @new_tokens, "\n",
+                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
+            }
+
+            $cases++;
+        }
+        elsif ( uc $token eq 'END' ) {
+            if ($cases) {
+                push @new_tokens, "\n",
+                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
+                $cases--;
+            }
+        }
+        elsif ( uc $token eq 'WHEN' ) {
+            if ($cases) {
+                push @new_tokens, "\n",
+                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
+            }
+        }
+        elsif ( uc $token eq 'ELSE' ) {
+            if ($cases) {
+                push @new_tokens, "\n",
+                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
+            }
+        }
+
+        push @new_tokens, $token;
+    }
+
+    return grep { defined $_ } @new_tokens;
+}
+
+sub format_decode {
+    my ( $self, @line ) = @_;
+
+    return @line unless (@line);
+
+    my @new_tokens;
+    my $parens     = 0;
+    my @dec_parens = (0);
+    my @dec_commas = (0);
+    my $decodes    = 0;
+
+    my %wrap_before = map { $_ => 1 } ( '+', '-', '*', '/', '||' );
+
+    my $base_indent = '';
+    if ( @line and $line[0] =~ $space_re ) {
+        $base_indent = $line[0];
+    }
+
+    foreach my $idx ( 0 .. $#line ) {
+        my $token = $line[$idx];
+        my $last_token = ( $idx > 0 ) ? $line[ $idx - 1 ] : '';
+
+        if ( uc $token eq 'DECODE' ) {
+
+            if ( $idx == 0 or ( $idx == 1 and $last_token =~ $space_re ) ) {
+                # Do nothing
+            }
+            elsif ( $idx > 0 and exists $wrap_before{ $new_tokens[-1] } ) {
+                if ( $idx > 1 and $new_tokens[-2] =~ $space_re ) {
+                    # Dont re-wrap...
+                }
+                else {
+                    my $temp = $new_tokens[-1];
+                    $new_tokens[-1] = undef;
+                    push @new_tokens, "\n", $indenter->add_indents( $base_indent, $parens + $decodes + 1 );
+                    push @new_tokens, $temp;
+                }
+            }
+
+            $decodes++;
+            $dec_parens[$decodes] = 0;
+            $dec_commas[$decodes] = 0;
+
+        }
+        elsif ( $token eq '(' ) {
+            $parens++;
+            if ($decodes) {
+                $dec_parens[$decodes]++;
+            }
+        }
+        elsif ( $token eq ')' ) {
+            $parens--;
+            if ($decodes) {
+                $dec_parens[$decodes]--;
+                if ( $dec_parens[$decodes] == 0 ) {
+                    $decodes--;
+                    my $next_token = ( $idx < $#line ) ? uc $line[ $idx + 1 ] : '';
+
+                    # Do we wrap at the end of the decode? Usually
+                    # yes, but not if the decode is at the "end of the
+                    # line" where end of line == [AS] alias [,]
+
+                    if (   uc $next_token eq 'AS'
+                        or $next_token eq ')'
+                        or $next_token eq ','
+                        or $#line - $idx == 1
+                        or $#line - $idx == 2 and $line[-1] eq ',' )
+                    {
+                        # Do not wrap
+                    }
+                    else {
+                        push @new_tokens, $token;
+                        my $offset = $parens;
+                        $offset ||= 1;
+                        push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+                        $token = undef;
+                    }
+
+                }
+            }
+        }
+        elsif ( $token eq ',' ) {
+            if ($decodes) {
+                $dec_commas[$decodes]++;
+
+                my $offset = $parens + $decodes;
+                $offset ||= 1;
+
+                if ( $dec_commas[$decodes] % 2 ) {
+                    push @new_tokens, $token;
+                    push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+                    $token = undef;
+                }
+            }
+        }
+
+        if ( defined $token ) {
+            push @new_tokens, $token;
+        }
+
     }
 
     return grep { defined $_ } @new_tokens;
