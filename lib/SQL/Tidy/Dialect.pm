@@ -245,12 +245,14 @@ sub pl_keywords {
         FOR
         FUNCTION
         IF
+        IN
         IS
         LOOP
         NOT
         NULL
         OR
         PROCEDURE
+        RAISE
         RETURN
         ROLLBACK
         THEN
