@@ -293,6 +293,9 @@ sub add_vspace {
     my @new_tokens;
     my @block_stack;
 
+    # TODO: Need to deal with [sub?] procedure prototypes/headers that
+    # have no arguments "PROCEDURE foo IS [some_id table.column%type [:= value]]"
+
     foreach my $idx ( 0 .. $#tokens ) {
         my $token       = uc $tokens[$idx];
         my $line_before = 0;
@@ -512,6 +515,8 @@ sub add_indents {
     my @block_stack;
 
     my $parens = 0;
+
+    # TODO: need to deal with sub-procedures/functions
 
     foreach my $idx ( 0 .. $#tokens ) {
         my $token      = uc $tokens[$idx];
