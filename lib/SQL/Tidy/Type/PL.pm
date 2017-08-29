@@ -292,6 +292,7 @@ sub add_vspace {
     my ( $self, $comments, @tokens ) = @_;
     my @new_tokens;
     my @block_stack;
+    my $in_proc_sig = 0;
 
     # TODO: Need to deal with [sub?] procedure prototypes/headers that
     # have no arguments "PROCEDURE foo IS [some_id table.column%type [:= value]]"
@@ -300,6 +301,33 @@ sub add_vspace {
         my $token       = uc $tokens[$idx];
         my $line_before = 0;
         my $line_after  = 0;
+
+        # Force function/procedure signatures to line-wrap
+        if ( $token eq 'FUNCTION' or $token eq 'PROCEDURE' ) {
+            $in_proc_sig = 1;
+        }
+        elsif ($in_proc_sig) {
+            if ( $token eq '(' ) {
+                $line_after = 1;
+            }
+            elsif ( $token eq ',' ) {
+                $line_after = 1;
+            }
+            elsif ( $token eq ';' ) {
+                $in_proc_sig = 0;
+                $line_after  = 1;
+            }
+            elsif ( $token eq 'AS' ) {
+                $in_proc_sig = 0;
+                $line_before = 1;
+                $line_after  = 1;
+            }
+            elsif ( $token eq 'IS' ) {
+                $in_proc_sig = 0;
+                $line_before = 1;
+                $line_after  = 1;
+            }
+        }
 
         if ( $token eq 'DECLARE' ) {
             $line_before = 1;
@@ -319,6 +347,9 @@ sub add_vspace {
         elsif ( $token eq 'RETURN' ) {
             $line_before = 1;
         }
+
+        # [procedure|function] <name> IS
+
         elsif ( $token eq 'IF' ) {
 
             # Ensure that this is the beginning of an IF block, not the end of one

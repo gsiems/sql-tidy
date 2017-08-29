@@ -561,25 +561,9 @@ sub wrap_paren_list {
     }
     my $indent = $indenter->add_indents( $base_indent, $indent_by );
 
-    my $idx_func = $self->find_first( 'FUNCTION',  @tokens );
-    my $idx_proc = $self->find_first( 'PROCEDURE', @tokens );
-
     my $do_wrap = 0;
 
-    # Function/procedure headers/prototypes with any list OR lists with
-    # four or more items...
-    if (
-        (
-            ( defined $idx_func and $idx_func < 2 )
-            or ( defined $idx_proc
-                and $idx_proc < 2 )
-        )
-        and ( join( ' ', @tokens ) =~ m/ +\((.+,).+\)/i )
-        )
-    {
-        $do_wrap = 1;
-    }
-    elsif ( join( ' ', @tokens ) =~ m/ +\((.+,){4}.+\)/i ) {
+    if ( join( ' ', @tokens ) =~ m/ +\((.+,){4}.+\)/i ) {
         $do_wrap = 1;
     }
 
