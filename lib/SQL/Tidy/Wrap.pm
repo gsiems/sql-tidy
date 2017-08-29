@@ -224,7 +224,9 @@ sub _wrap_line {
 
     # TODO: also, IF this is called more than once, or processes a WHEN
     # ... THEN (or decode, or ???) then there is the matter of adjusting
-    # the indent based on the kind of line being wrapped.
+    # the indent based on the kind of line being wrapped. Initial line
+    # from wrapped lines get one or two additional indents while
+    # following wrapped lines may get none (depending on the kind of wrap).
 
     # For WHEN ... THEN
     # Wrap on THEN IIF it will make the left-hand side short enough
@@ -559,7 +561,31 @@ sub wrap_paren_list {
     }
     my $indent = $indenter->add_indents( $base_indent, $indent_by );
 
-    if ( join( ' ', @tokens ) =~ m/ +\((.+,){4}.+\)/i ) {
+    my $idx_func = $self->find_first( 'FUNCTION',  @tokens );
+    my $idx_proc = $self->find_first( 'PROCEDURE', @tokens );
+
+    my $do_wrap = 0;
+
+    # Function/procedure headers/prototypes with any list OR lists with
+    # four or more items...
+    if (
+        (
+            ( defined $idx_func and $idx_func < 2 )
+            or ( defined $idx_proc
+                and $idx_proc < 2 )
+        )
+        and ( join( ' ', @tokens ) =~ m/ +\((.+,).+\)/i )
+        )
+    {
+        $do_wrap = 1;
+    }
+    elsif ( join( ' ', @tokens ) =~ m/ +\((.+,){4}.+\)/i ) {
+        $do_wrap = 1;
+    }
+
+    # Or lists with fewer than four items that are none-the-less rather long...
+
+    if ($do_wrap) {
         # We appear to have a " ( list, of, four or more, things )"
 
         # TODO: How to deal with nested parens... or two sets of parens in the same line
