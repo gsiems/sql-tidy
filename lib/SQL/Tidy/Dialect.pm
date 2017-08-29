@@ -243,16 +243,18 @@ sub pl_keywords {
         EXIT
         FETCH
         FOR
+        FUNCTION
         IF
+        IS
         LOOP
+        NOT
+        NULL
         OR
+        PROCEDURE
         RETURN
         ROLLBACK
         THEN
         WHEN
-        IS
-        NULL
-        NOT
 
         )
         )
