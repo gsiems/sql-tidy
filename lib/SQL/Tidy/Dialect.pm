@@ -57,6 +57,7 @@ sub ddl_keywords {
     foreach my $word (
         qw(
 
+        AFTER
         ALTER
         AS
         BEFORE
@@ -65,6 +66,8 @@ sub ddl_keywords {
         COMMENT
         CONSTRAINT
         CREATE
+        DATABASE
+        DDL
         DEFAULT
         DEFINER
         DROP
@@ -232,6 +235,7 @@ sub pl_keywords {
         qw(
 
         AND
+        AS
         BEGIN
         CASE
         COMMIT
@@ -244,6 +248,7 @@ sub pl_keywords {
         FETCH
         FOR
         FUNCTION
+        GOTO
         IF
         IN
         IS
