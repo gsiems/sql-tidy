@@ -647,12 +647,12 @@ sub add_indents {
             }
             elsif ( $next_token eq 'ELSIF' ) {
                 # In an IF block already
-                $offset = -1;
+                $offset--;
             }
             elsif ( $next_token eq 'ELSE' ) {
                 if ( $block_stack[-1] eq 'IF' ) {
                     # In an IF block already
-                    $offset = -1;
+                    $offset--;
                 }
             }
 
