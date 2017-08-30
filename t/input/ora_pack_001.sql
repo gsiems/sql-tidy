@@ -35,15 +35,15 @@ CREATE OR REPLACE PACKAGE BODY package_01 AS
             another_id table_y.id%type )
         IS
 
-    BEGIN
-    END ;
+        BEGIN
+        END ;
 
-    PROCEDURE sub_proc_main
-    IS
+        PROCEDURE sub_proc_main
+        IS
 
-    BEGIN
-        sub_proc_001_01 ( 1, 1 ) ;
-    END ;
+        BEGIN
+            sub_proc_001_01 ( 1, 1 ) ;
+        END ;
 
     BEGIN
         sub_proc_main ;

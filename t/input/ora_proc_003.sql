@@ -1,4 +1,3 @@
-
 CREATE OR REPLACE PROCEDURE proc_02
 AS
     PROCEDURE sub_proc_main ;
@@ -20,10 +19,8 @@ AS
         sub_proc_001_01 ( 1, 1 ) ;
     END ;
 
-    BEGIN
-        sub_proc_main ;
-    END ;
-
+BEGIN
+    sub_proc_main ;
 END ;
 /
 
