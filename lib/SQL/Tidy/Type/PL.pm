@@ -129,14 +129,14 @@ sub tag {
         if ($pl_key) {
 
             # Very Oracle:
-            if ( $Dialect->dialect() eq 'Oracle' ) {
-                if ( $token eq '/' and $last_token eq ';' ) {
-                    $pl_key   = '';
-                    $ddl_type = '';
-                }
+            #if ( $Dialect->dialect() eq 'Oracle' ) {
+            if ( $token eq '/' and $last_token eq ';' ) {
+                $pl_key   = '';
+                $ddl_type = '';
             }
+            #}
 
-            if ( $pl_terminator and $token eq $pl_terminator and $last_token eq ';' ) {
+            elsif ( $pl_terminator and $token eq $pl_terminator and $last_token eq ';' ) {
                 $pl_key        = '';
                 $ddl_type      = '';
                 $pl_terminator = undef;
@@ -543,9 +543,9 @@ sub add_vspace {
 sub add_indents {
     my ( $self, @tokens ) = @_;
     my @new_tokens;
-    my @block_stack;
-
-    my $parens = 0;
+    my @block_stack = ();
+    my $parens      = 0;
+    my $in_proc_sig = 0;
 
     # TODO: need to deal with sub-procedures/functions
 
@@ -554,6 +554,23 @@ sub add_indents {
         my $next_token = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
         my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
 
+        if ( $token eq 'FUNCTION' or $token eq 'PROCEDURE' ) {
+            $in_proc_sig = 1;
+            push @block_stack, $token;
+        }
+        elsif ($in_proc_sig) {
+            if ( $token eq ';' ) {
+                $in_proc_sig = 0;
+                pop @block_stack;
+            }
+            elsif ( $token eq 'IS' ) {
+                $in_proc_sig = 0;
+            }
+            elsif ( $token eq 'AS' and $parens == 0 ) {
+                $in_proc_sig = 0;
+            }
+        }
+
         if ( $token eq '(' ) {
             $parens++;
         }
@@ -561,8 +578,14 @@ sub add_indents {
             $parens--;
         }
         elsif ( $token eq 'BEGIN' ) {
-            push @block_stack, $token;
+            if ( @block_stack and ( $block_stack[-1] eq 'FUNCTION' or $block_stack[-1] eq 'PROCEDURE' ) ) {
+                $block_stack[-1] = $token;
+            }
+            else {
+                push @block_stack, $token;
+            }
         }
+
         elsif ( $token eq 'CASE' ) {
             push @block_stack, $token;
         }
@@ -571,14 +594,11 @@ sub add_indents {
                 push @block_stack, $token;
             }
         }
-        # TODO: LOOP
-
         elsif ( $token eq 'LOOP' ) {
             if ( $next_token eq "\n" ) {
                 push @block_stack, $token;
             }
         }
-
         elsif ( $token eq 'EXCEPTION' or $token eq 'EXCEPTIONS' ) {
             if ( @block_stack and $block_stack[-1] eq 'BEGIN' ) {
                 $block_stack[-1] = 'EXCEPTION';
@@ -599,6 +619,14 @@ sub add_indents {
 
             }
             elsif ( $next_token eq 'BEGIN' ) {
+                # TODO: this isn't always --
+                #$offset--;
+                if ( @block_stack and $block_stack[-1] eq 'IF' ) {
+
+                }
+                else {
+                    $offset--;
+                }
 
             }
 
@@ -606,6 +634,13 @@ sub add_indents {
                 # Not yet in an IF block
 
             }
+
+            elsif ( $next_token eq 'IS' ) {
+                if ($in_proc_sig) {
+                    $offset--;
+                }
+            }
+
             elsif ( $next_token eq 'CASE' ) {
                 # Not yet in a CASE block
             }
@@ -651,6 +686,7 @@ sub add_indents {
             push @new_tokens, "\n";
 
             if ( $next_token ne "\n" ) {
+
                 my $indent = $indenter->to_indent( scalar @block_stack + $parens + $offset );
                 #push @new_tokens, "-- " . join (', ', scalar @block_stack, $parens, $offset );
                 if ($indent) {
@@ -662,6 +698,7 @@ sub add_indents {
         else {
             push @new_tokens, $tokens[$idx];
         }
+
     }
     return @new_tokens;
 
