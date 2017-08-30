@@ -963,7 +963,7 @@ sub format_decode {
                 my $offset = $parens + $decodes;
                 $offset ||= 1;
 
-                if ( $dec_commas[$decodes] % 2 ) {
+                if ( $dec_parens[$decodes] == 1 and $dec_commas[$decodes] % 2 ) {
                     push @new_tokens, $token;
                     push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
                     $token = undef;
