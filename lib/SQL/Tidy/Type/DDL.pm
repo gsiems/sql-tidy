@@ -121,6 +121,9 @@ sub add_vspace {
             elsif ( $in_view_sig and $parens == 1 ) {
                 $line_after = 1;
             }
+            elsif ( $current eq 'CREATE' and $parens == 1 ) {
+                $line_after = 1;
+            }
         }
         elsif ( $token eq ')' ) {
             $parens--;
@@ -136,6 +139,9 @@ sub add_vspace {
                 $line_after = 1;
             }
             elsif ( $in_view_sig and $parens == 1 ) {
+                $line_after = 1;
+            }
+            elsif ( $parens == 1 ) {
                 $line_after = 1;
             }
         }
