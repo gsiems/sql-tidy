@@ -3,8 +3,7 @@ SELECT 'a',
             WHEN substr ( table_1.id, 1, 2 ) = 'SA' THEN
                 'SA' || lpad ( substr ( table_1.id, instr ( table_1.id, 'A' ) + 1 ), 7, '0' )
             ELSE table_1.id
-            END
-            || ' - ' || substr ( table_3.name, 1, 52 ) AS title_desc,
+            END || ' - ' || substr ( table_3.name, 1, 52 ) AS title_desc,
         CASE max ( table_2.code_a )
             WHEN 'CODEA' THEN
                 CASE
@@ -33,8 +32,7 @@ SELECT 'a',
         CASE
             WHEN max ( table_2.code_a ) IN ( 'CODEA', 'CODEB' ) THEN
                 coalesce ( max ( table_2.end_date ), max ( table_2.start_date ), max ( table_2.created_date ) )
-            ELSE
-                coalesce ( max ( table_2.start_date ), max ( table_2.created_date ) )
+            ELSE coalesce ( max ( table_2.start_date ), max ( table_2.created_date ) )
             END AS act_stat_dt,
         max ( updated_date ),
         max ( created_date ),
@@ -42,16 +40,13 @@ SELECT 'a',
     FROM schema_1.table_2
     JOIN schema_1.table_3
         ON ( table_2.id = table_3.id ) ;
-
 --
-
 SELECT 'a',
         CASE
             WHEN substr ( table_1.id, 1, 2 ) = 'SA' THEN
                 'SA' || lpad ( substr ( table_1.id, instr ( table_1.id, 'A' ) + 1 ), 7, '0' )
             ELSE table_1.id
-            END
-            || ' - ' || substr ( table_3.name, 1, 52 ) AS title_desc,
+            END || ' - ' || substr ( table_3.name, 1, 52 ) AS title_desc,
         CASE
             WHEN max ( table_2.code_a ) = 'CODEA' AND max ( table_2.end_date ) IS NOT NULL THEN '100'
             -- max ( table_2.end_date ) IS NULL
@@ -67,8 +62,7 @@ SELECT 'a',
         CASE
             WHEN max ( table_2.code_a ) IN ( 'CODEA', 'CODEB' ) THEN
                 coalesce ( max ( table_2.end_date ), max ( table_2.start_date ), max ( table_2.created_date ) )
-            ELSE
-                coalesce ( max ( table_2.start_date ), max ( table_2.created_date ) )
+            ELSE coalesce ( max ( table_2.start_date ), max ( table_2.created_date ) )
             END AS act_stat_dt,
         max ( updated_date ),
         max ( created_date ),
