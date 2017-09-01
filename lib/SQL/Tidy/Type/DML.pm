@@ -508,7 +508,7 @@ sub add_indents {
     my $parens          = 0;
     my $statement_type  = '';
     my $last_sub_clause = '';
-    my @cases;
+    my @cases           = ();
     my @sc;
 
     my %h = (
@@ -611,9 +611,6 @@ sub add_indents {
             }
 
             my $indent_case = scalar @cases;
-            if ( @cases and ( uc $next_token eq 'AND' or uc $next_token eq 'OR' ) ) {
-                $indent_case++;
-            }
 
             # if the parens are non-balanced relative to the start
             # then we need to look to the last sub token for indenting. ???
@@ -686,7 +683,13 @@ sub post_add_indents {
     return @tokens unless (@tokens);
 
     my @new_tokens;
-    my @line = ();
+    my @temp;
+    my @case;
+    my @line   = ();
+    my $cases  = 0;
+    my $indent = '';
+
+    @tokens = $self->format_case(@tokens);
 
     foreach my $idx ( 0 .. $#tokens ) {
         my $token = $tokens[$idx];
@@ -713,10 +716,6 @@ sub post_add_indents {
                 push @new_tokens, $self->format_pivot(@line);
             }
             else {
-
-                if ( $Wrapper->find_first( 'CASE', @line ) ) {
-                    @line = $self->format_case(@line);
-                }
 
                 if ( $Wrapper->find_first( 'DECODE', @line ) ) {
                     @line = $self->format_decode(@line);
@@ -785,91 +784,118 @@ sub format_pivot {
 }
 
 sub format_case {
-    my ( $self, @line ) = @_;
+    my ( $self, @tokens ) = @_;
 
-    return @line unless (@line);
+    # ASSERTIONS:
+    # 1. We are scanning ALL the tokens for the DML statement
+    # 2. CASE structures have not been wrapped yet (except due to
+    #       comments
+    # 3. ...
+
+    return @tokens unless (@tokens);
+    return @tokens unless ( $Wrapper->find_first( 'CASE', @tokens ) );
 
     my @new_tokens;
     my $parens      = 0;
     my $cases       = 0;
-    my $case_offset = 0;
-    my $stmt_offset = 0;
+    my @case_offset = ();
+    my $base_indent = '';
 
     my %wrap_before = map { $_ => 1 } ( '+', '-', '*', '/', '||' );
-    my %indents = map { $_ => 2 } (qw(SELECT WHERE));
 
-    my $base_indent = '';
-    if ( @line and $line[0] =~ $space_re ) {
-        $base_indent = $line[0];
-    }
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token           = uc $tokens[$idx];
+        my $last_token      = ( $idx > 0 and defined $tokens[ $idx - 1 ] ) ? uc $tokens[ $idx - 1 ] : '';
+        my $next_last_token = ( $idx > 1 and defined $tokens[ $idx - 2 ] ) ? uc $tokens[ $idx - 2 ] : '';
 
-    foreach my $idx ( 0 .. $#line ) {
-        my $token = $line[$idx];
-        my $last_token = ( $idx > 0 ) ? $line[ $idx - 1 ] : '';
-
-        if ( uc $token eq '(' ) {
+        if ( $token eq '(' ) {
             $parens++;
         }
-        elsif ( uc $token eq ')' ) {
+        elsif ( $token eq ')' ) {
             $parens--;
         }
-        elsif ( uc $token eq 'CASE' ) {
+        elsif ( $token =~ $space_re and $cases == 0 ) {
+            $base_indent = $token;
+        }
+
+        if ( $token eq 'CASE' ) {
             # If the CASE is the leading token then do nothing, otherwise
             # indent by base_indent + parens + cases + case_offset
             # If the last token is a math or concatenation operator then
             # indent before the last token (unless we've already indented before the operator).
 
-            if ( exists $indents{ uc $line[0] } ) {
-                $stmt_offset = $indents{ uc $line[0] };
-            }
-            elsif ( $line[0] =~ $space_re and exists $indents{ uc $line[1] } ) {
-                $stmt_offset = $indents{ uc $line[1] };
-            }
+            $cases++;
+            $case_offset[$cases] = 0;
 
-            if ( $idx == 0 or ( $idx == 1 and $last_token =~ $space_re ) ) {
+            if ( $last_token =~ $space_re and $next_last_token eq "\n" ) {
                 # Do nothing
             }
-            elsif ( $idx > 0 and exists $wrap_before{ $new_tokens[-1] } ) {
-                if ( $idx > 1 and $new_tokens[-2] =~ $space_re ) {
-                    # Dont re-wrap...
-                }
-                else {
-                    $case_offset = 1;
-                    my $temp = $new_tokens[-1];
-                    $new_tokens[-1] = undef;
-                    push @new_tokens, "\n",
-                        $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
-                    push @new_tokens, $temp;
-                }
+            elsif ( $last_token eq "\n" ) {
+                # Probably shouldn't happen... but do nothing
             }
-            elsif ( $last_token eq '(' ) {
-                push @new_tokens, "\n",
-                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
+            elsif ( $last_token eq 'SELECT' ) {
+                # Do not wrap the case
+                $base_indent = $indenter->add_indents( $base_indent, 2 );
             }
+            elsif ( $last_token =~ m/^(WHERE|BY|HAVING)$/ ) {
+                # Do not wrap the case
+                $base_indent = $indenter->add_indents( $base_indent, 1 );
+            }
+            elsif ( exists $wrap_before{$last_token} ) {
+                $case_offset[$cases] = $parens + 1;    # TODO: need to check this...
 
-            $cases++;
-        }
-        elsif ( uc $token eq 'END' ) {
-            if ($cases) {
-                push @new_tokens, "\n",
-                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
-                $cases--;
+                my $temp = $new_tokens[-1];
+                $new_tokens[-1] = "\n";
+
+                push @new_tokens,
+                    $indenter->add_indents( $base_indent, $parens + ( $cases * 2 ) - 2 + $case_offset[$cases] ), $temp;
             }
-        }
-        elsif ( uc $token eq 'WHEN' ) {
-            if ($cases) {
+            else {
                 push @new_tokens, "\n",
-                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
-            }
-        }
-        elsif ( uc $token eq 'ELSE' ) {
-            if ($cases) {
-                push @new_tokens, "\n",
-                    $indenter->add_indents( $base_indent, $parens + $cases + $case_offset + $stmt_offset );
+                    $indenter->add_indents( $base_indent, $parens + ( $cases * 2 ) - 2 + $case_offset[$cases] );
             }
         }
 
-        push @new_tokens, $token;
+        elsif ( $token eq 'WHEN' or $token eq 'ELSE' or $token eq 'END' ) {
+            if ($cases) {
+                push @new_tokens, "\n",
+                    $indenter->add_indents( $base_indent, $parens + ( $cases * 2 ) - 1 + $case_offset[$cases] );
+                if ( $token eq 'END' ) {
+                    $case_offset[$cases] = 0;
+                    $cases--;
+                }
+            }
+        }
+
+        if ( defined $tokens[$idx] ) {
+            push @new_tokens, $tokens[$idx];
+        }
+    }
+
+    # We *could* attempt to keep extra line-breaks (mostly? due to
+    # comments) out of the CASE formatting but it is currently easier to
+    # just clean them up after the fact.
+
+    foreach my $idx ( 0 .. $#new_tokens ) {
+        my $token = $new_tokens[$idx];
+        next unless ( defined $token );
+
+        if ( $token eq "\n" ) {
+
+            my $second = $new_tokens[ $idx + 1 ];
+            $second = '' unless ( defined $second );
+
+            my $third = $new_tokens[ $idx + 2 ];
+            $third = '' unless ( defined $third );
+
+            if ( $second eq "\n" ) {
+                $new_tokens[ $idx + 1 ] = undef;
+            }
+            elsif ( $second =~ $space_re and $third eq "\n" ) {
+                $new_tokens[ $idx + 1 ] = undef;
+                $new_tokens[ $idx + 2 ] = undef;
+            }
+        }
     }
 
     return grep { defined $_ } @new_tokens;
