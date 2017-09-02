@@ -129,13 +129,11 @@ sub tag {
         if ($pl_key) {
 
             # Very Oracle:
-            #if ( $Dialect->dialect() eq 'Oracle' ) {
             if ( $token eq '/' and $last_token eq ';' ) {
                 $pl_key   = '';
                 $ddl_type = '';
             }
-            #}
-
+            # PostgreSQL:
             elsif ( $pl_terminator and $token eq $pl_terminator and $last_token eq ';' ) {
                 $pl_key        = '';
                 $ddl_type      = '';
@@ -543,63 +541,160 @@ sub add_vspace {
 sub add_indents {
     my ( $self, @tokens ) = @_;
     my @new_tokens;
-    my @block_stack = ();
-    my $parens      = 0;
-    my $in_proc_sig = 0;
+    my $parens       = 0;
+    my $in_proc_sig  = 0;
+    my $in_exception = 0;
+    my $cases        = 0;
+    my @eb_stack     = ();
+    my $eb_depth     = 0;
+
+    my %h = (
+
+        'FUNCTION'  => 1,
+        'PROCEDURE' => 1,
+        'IS'        => 1,
+        'AS'        => 1,
+        'DECLARE'   => 1,
+        'BEGIN'     => 1,
+        'LOOP'      => 1,
+        'IF'        => 1,
+        'ELSIF'     => 1,
+        'ELSE'      => 1,
+        'END'       => 1,
+        'EXCEPTION' => 1,
+        'OTHER'     => 2
+    );
 
     foreach my $idx ( 0 .. $#tokens ) {
-        my $token      = uc $tokens[$idx];
-        my $next_token = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
-        my $last_token = ( $idx > 0 ) ? uc $tokens[ $idx - 1 ] : '';
+        my $token = uc $tokens[$idx];
+        next unless ( defined $token );
 
-        # Things that may add to the "block stack" where block stack are
-        # thos constructs that end with some form of "END" statement
-        if ( $token eq 'FUNCTION' or $token eq 'PROCEDURE' ) {
-            $in_proc_sig = 1;
-            push @block_stack, $token;
-        }
-        elsif ( $token eq 'CASE' ) {
-            push @block_stack, $token;
-        }
-        elsif ( $token eq 'IF' ) {
-            if ( $last_token ne 'END' ) {
-                push @block_stack, $token;
+        my $next_token = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
+        my $last_token = ( $idx > 0 )        ? uc $tokens[ $idx - 1 ] : '';
+
+        # On new lines, the indent needs to know next token in order to
+        # have a clue as to how much to indent.
+        my $needs_indent = 0;
+        if ( $token eq "\n" ) {
+            $needs_indent = 1;
+
+            if (   $next_token eq 'FUNCTION'
+                or $next_token eq 'PROCEDURE' )
+            {
+                $in_proc_sig = 1;
+                $eb_depth++;
+                $eb_stack[$eb_depth] = $next_token;
+            }
+            elsif ( $next_token eq 'IF' ) {
+                $eb_depth++;
+                $eb_stack[$eb_depth] = $next_token;
+            }
+            elsif ( $next_token eq 'CASE' ) {
+                $cases++;
+                $eb_depth++;
+                $eb_stack[$eb_depth] = $next_token;
+            }
+            elsif ( $next_token eq 'BEGIN' ) {
+                if ( $eb_stack[-1] and ( $eb_stack[-1] eq 'FUNCTION' or $eb_stack[-1] eq 'PROCEDURE' ) ) {
+                    $eb_stack[-1] = $next_token;
+                }
+
+                elsif ($eb_depth) {
+                    $eb_depth++;
+                    $eb_stack[$eb_depth] = $next_token;
+                }
+            }
+            elsif ( $next_token eq 'EXCEPTION' ) {
+                $in_exception = 1;
+                if ($eb_depth) {
+                    $eb_stack[$eb_depth] = $next_token;
+                }
             }
         }
-        elsif ( $token eq 'LOOP' ) {
-            if ( $next_token eq "\n" ) {
-                push @block_stack, $token;
+        elsif ( $idx == 0 ) {
+            # Note: only do this if it is the first token as the
+            # '$token eq "\n"' check should get it otherwise.
+
+            if ( $token !~ m/\$.*\$/ ) {
+                # Not the beginning of a Pg PL
+                $needs_indent = 1;
+            }
+            if ( $token eq 'FUNCTION' or $token eq 'PROCEDURE' ) {
+                $in_proc_sig = 1;
+                $eb_depth++;
+                $eb_stack[$eb_depth] = $token;
             }
         }
-        elsif ( $token eq 'BEGIN' ) {
-            if ( @block_stack and ( $block_stack[-1] eq 'FUNCTION' or $block_stack[-1] eq 'PROCEDURE' ) ) {
-                $block_stack[-1] = $token;
+
+        ################################################################
+        if ($needs_indent) {
+            my $offset = 0;
+
+            if ( $token eq "\n" ) {
+
+                if ( $in_exception
+                    and ( $next_token ne 'EXCEPTION' and $next_token ne 'WHEN' and $next_token ne 'END' ) )
+                {
+                    $offset += 2;
+                }
+                elsif ( $next_token eq 'CASE' ) {
+                }
+                elsif ( $cases and $eb_stack[-1] and $next_token ne 'END' ) {
+                    $offset++;
+                }
+                elsif ( exists $h{$next_token} or $in_proc_sig ) {
+                    # Nothing
+                }
+                else {
+                    $offset++;
+                }
+
+                my $indent = $indenter->to_indent( $eb_depth + $parens + $offset );
+                push @new_tokens, "\n", $indent;
             }
             else {
-                push @block_stack, $token;
+
+                if (    $idx == 0
+                    and $token ne 'FUNCTION'
+                    and $token ne 'PROCEDURE'
+                    and $token ne 'BEGIN'
+                    and $token ne 'DECLARE' )
+                {
+                    $offset++;
+                }
+
+                my $indent = $indenter->to_indent( $eb_depth + $parens + $offset );
+                push @new_tokens, $indent, $tokens[$idx];
             }
         }
-        elsif ( $token eq 'EXCEPTION' or $token eq 'EXCEPTIONS' ) {
-            if ( @block_stack and $block_stack[-1] eq 'BEGIN' ) {
-                $block_stack[-1] = 'EXCEPTION';
+        elsif ( defined $tokens[$idx] ) {
+            push @new_tokens, $tokens[$idx];
+        }
+
+        ################################################################
+        if ( $next_token eq 'END' ) {
+            pop @eb_stack;
+            $eb_depth--;
+            $in_exception = 0;
+            if ($cases) {
+                $cases--;
             }
         }
 
-        # Things that remove from the block stack
-        elsif ( $token eq 'END' ) {
-            if (@block_stack) {
-                pop @block_stack;
-            }
+        if ( $token eq '(' ) {
+            $parens++;
+        }
+        elsif ( $token eq ')' ) {
+            $parens--;
         }
         elsif ( $token eq ';' ) {
             if ($in_proc_sig) {
                 # 'tis merely a function/procedure prototype
                 $in_proc_sig = 0;
-                pop @block_stack;
+                pop @eb_stack;
+                $eb_depth--;
             }
         }
-
-        # Other
         elsif ( $token eq 'IS' ) {
             if ($in_proc_sig) {
                 $in_proc_sig = 0;
@@ -610,71 +705,16 @@ sub add_indents {
                 $in_proc_sig = 0;
             }
         }
-        elsif ( $token eq '(' ) {
-            $parens++;
+        elsif ( $token eq 'LOOP' ) {
+            if ( $next_token eq "\n" ) {
+                # TODO: or next token is a comment and the one after that is the "\n"
+                $eb_depth++;
+                $eb_stack[$eb_depth] = $token;
+            }
         }
-        elsif ( $token eq ')' ) {
-            $parens--;
-        }
-
-        ################################################################
-        if ( $token eq "\n" ) {
-
-            my $offset = -$in_proc_sig;
-
-            if ( @block_stack and $block_stack[-1] eq 'EXCEPTION' ) {
-                if ( $next_token !~ m/^(WHEN|EXCEPTION|EXCEPTIONS|END)$/ ) {
-                    $offset++;
-                }
-            }
-            if ( $next_token eq 'EXCEPTION' or $next_token eq 'EXCEPTIONS' ) {
-                $offset--;
-            }
-
-            if ( $next_token eq 'BEGIN' ) {
-                # TODO: this isn't always --
-                #$offset--;
-                if ( @block_stack and $block_stack[-1] eq 'IF' ) {
-
-                }
-                else {
-                    $offset--;
-                }
-
-            }
-            elsif ( $next_token eq 'END' ) {
-                $offset--;
-            }
-            elsif ( $next_token eq 'ELSIF' ) {
-                # In an IF block already
-                $offset--;
-            }
-            elsif ( $next_token eq 'ELSE' ) {
-                if ( $block_stack[-1] eq 'IF' ) {
-                    # In an IF block already
-                    $offset--;
-                }
-            }
-
-            push @new_tokens, "\n";
-
-            if ( $next_token ne "\n" ) {
-
-                my $indent = $indenter->to_indent( scalar @block_stack + $parens + $offset );
-                #push @new_tokens, "-- " . join (', ', scalar @block_stack, $parens, $offset );
-                if ($indent) {
-                    push @new_tokens, $indent;
-                }
-            }
-
-        }
-        else {
-            push @new_tokens, $tokens[$idx];
-        }
-
     }
-    return @new_tokens;
 
+    return @new_tokens;
 }
 
 =back
