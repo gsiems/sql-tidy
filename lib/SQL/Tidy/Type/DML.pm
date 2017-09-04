@@ -27,6 +27,7 @@ my $Dialect;
 my $indenter;
 my $space_re;
 my $case_folding;
+my $convert_decode;
 my $Wrapper;
 
 =item new
@@ -41,11 +42,12 @@ sub new {
     my $self = {};
     bless $self, $class;
 
-    $Dialect      = SQL::Tidy::Dialect->new($args);
-    $indenter     = SQL::Tidy::Indent->new($args);
-    $space_re     = $args->{space_re};
-    $case_folding = $args->{case_folding} || 'upper';
-    $Wrapper      = SQL::Tidy::Wrap->new($args);
+    $Dialect        = SQL::Tidy::Dialect->new($args);
+    $indenter       = SQL::Tidy::Indent->new($args);
+    $space_re       = $args->{space_re};
+    $case_folding   = $args->{case_folding} || 'upper';
+    $convert_decode = $args->{convert_decode} || 0;
+    $Wrapper        = SQL::Tidy::Wrap->new($args);
 
     return $self;
 }
@@ -270,6 +272,28 @@ sub untag {
     }
 
     return @new_tokens;
+}
+
+sub format {
+    my ( $self, $comments, $blocks ) = @_;
+
+    if ( $blocks and ref($blocks) eq 'HASH' ) {
+        foreach my $key ( keys %{$blocks} ) {
+            my @ary = @{ $blocks->{$key} };
+
+            if ($convert_decode) {
+                @ary = $self->convert_decode(@ary);
+            }
+
+            @ary = $self->unquote_identifiers(@ary);
+            @ary = $self->capitalize_keywords(@ary);
+            @ary = $self->add_vspace( $comments, @ary );
+            @ary = $self->add_indents(@ary);
+
+            $blocks->{$key} = \@ary;
+        }
+    }
+    return $blocks;
 }
 
 =item capitalize_keywords ( tokens )
@@ -1004,6 +1028,92 @@ sub format_decode {
     }
 
     return grep { defined $_ } @new_tokens;
+}
+
+sub convert_decode {
+    my ( $self, @tokens ) = @_;
+
+    # ASSERTIONS:
+    # 1. We are scanning ALL the tokens for the DML statement
+
+    return @tokens unless (@tokens);
+    return @tokens unless ( $Wrapper->find_first( 'DECODE', @tokens ) );
+
+    my $parens = 0;
+    my $commas = 0;
+    my @new_tokens;
+
+    my ( $pre, $fcn, $post ) = $Wrapper->extract_function( 'DECODE', @tokens );
+
+    while ( $#$fcn > 2) {
+
+        push @new_tokens, @{$pre};
+
+        my @temp;
+        my $parens = 0;
+        my $last_when;
+        my $last_then;
+
+        foreach my $idx ( 0 .. $#$fcn ) {
+            my $token = $fcn->[$idx];
+            next unless ( defined $token );
+
+            if ( $token eq '(' ) {
+                $parens++;
+            }
+            elsif ( $token eq ')' ) {
+                $parens--;
+                if ( $parens == 0 ) {
+                    if ( $last_when > $last_then ) {
+                        # convert the ELSE
+                        $temp[$last_when] = 'ELSE';
+                    }
+                    # We should be done with this decode...
+                    $token  = 'END';
+                    $commas = 0;
+                }
+            }
+            elsif ( $token eq ',' and $parens == 1 ) {
+                $commas++;
+
+                if ( $commas % 2 ) {
+                    $token     = 'WHEN';
+                    $last_when = $#temp + 1;
+                }
+                else {
+                    $token     = 'THEN';
+                    $last_then = $#temp + 1;
+                }
+            }
+
+            if ( $idx == 0 and uc $token eq 'DECODE' ) {
+                $token = 'CASE';
+            }
+            elsif ( $idx < 4 and $token eq '(' ) {
+                $token = '';
+            }
+
+            if ( defined $token ) {
+                push @temp, $token;
+            }
+
+            # In case of nested decodes
+            if ( $Wrapper->find_first( 'DECODE', @temp ) ) {
+                @temp = $self->convert_decode(@temp);
+            }
+        }
+
+        push @new_tokens, @temp;
+
+        ( $pre, $fcn, $post ) = $Wrapper->extract_function( 'DECODE', @{$post} );
+
+        if ( $#$fcn < 2 ) {
+            push @new_tokens, @{$pre};
+            last;
+        }
+    }
+
+    return grep { defined $_ and $_ ne '' } @new_tokens;
 }
 
 =back
