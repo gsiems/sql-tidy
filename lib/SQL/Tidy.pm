@@ -142,7 +142,7 @@ sub tidy {
     $code =~ s/\n*$/\n/;
     $code =~ s/ +\n/\n/g;
     $code =~ s/\n ([^ ])/\n$1/g;
-    $code =~ s/^(\t+) +([^ ])/$1$2/g;
+    $code =~ s/\t +([^ ])/\t$1/g;
 
     # Pg casting
     $code =~ s/ ::/::/g;
@@ -227,6 +227,10 @@ sub fix_spacing {
 
         # No spaces on either side of existing multiple-spaces
         elsif ( $token =~ m/^  +$/ ) {
+            $new_tokens[ $idx - 1 ] = '';
+            $new_tokens[ $idx + 1 ] = '';
+        }
+        elsif ( $token =~ m/^\t+$/ ) {
             $new_tokens[ $idx - 1 ] = '';
             $new_tokens[ $idx + 1 ] = '';
         }
