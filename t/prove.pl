@@ -40,6 +40,19 @@ foreach my $source_file (@source_files) {
 
     my $source_code = _slurp_file($source_file);
 
+    my @params = grep { $_ =~ m/^\-\- params:/ } split "\n", $source_code;
+    my %h;
+    if (@params) {
+        foreach my $line (@params) {
+            chomp $line;
+            $line =~ s/^\-\- args:\s+//;
+            foreach my $param ( split /\s+/, $line ) {
+                my ( $key, $val ) = split '=', $param;
+                $h{$key} = $val;
+            }
+        }
+    }
+
     my $expected_code = '';
     if ( -f $expected_file ) {
         $expected_code = _slurp_file($expected_file);
@@ -52,14 +65,13 @@ foreach my $source_file (@source_files) {
     my ($filename) = ( split '/', $source_file )[-1];
     my $dialect = 'Default';
     if ( $filename =~ m/^pg_/i ) {
-        $dialect = 'Pg';
+        $h{dialect} ||= 'Pg';
     }
     elsif ( $filename =~ m/^ora_/i ) {
-        $dialect = 'Oracle';
+        $h{dialect} ||= 'Oracle';
     }
 
-    my $tidy = SQL::Tidy->new( { 'dialect' => $dialect } );
-
+    my $tidy      = SQL::Tidy->new( \%h );
     my $tidy_code = $tidy->tidy($source_code);
 
     # Note that we don't consider extra new-lines at the end of the file
