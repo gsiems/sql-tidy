@@ -141,6 +141,8 @@ sub tidy {
     $code =~ s/;\n\n\//;\n\//g;
     $code =~ s/\n*$/\n/;
     $code =~ s/ +\n/\n/g;
+    $code =~ s/\n ([^ ])/\n$1/g;
+    $code =~ s/^(\t+) +([^ ])/$1$2/g;
 
     # Pg casting
     $code =~ s/ ::/::/g;
