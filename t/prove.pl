@@ -45,7 +45,7 @@ foreach my $source_file (@source_files) {
     if (@params) {
         foreach my $line (@params) {
             chomp $line;
-            $line =~ s/^\-\- args:\s+//;
+            $line =~ s/^\-\- params:\s+//;
             foreach my $param ( split /\s+/, $line ) {
                 my ( $key, $val ) = split '=', $param;
                 $h{$key} = $val;
