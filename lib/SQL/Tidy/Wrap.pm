@@ -239,6 +239,15 @@ sub _wrap_line {
         }
     }
 
+    # For ... AND|OR ... AND|OR ...
+    if ( not $wrapped ) {
+        my @temp;
+        ( $wrapped, @temp ) = $self->wrap_boolean( $indent_by, $strings, $comments, @tokens );
+        if ($wrapped) {
+            push @new_tokens, @temp;
+        }
+    }
+
     # IN clauses
     # For IN clauses, if the number of the items in the list is long
     # enough then wrap the list.
@@ -539,6 +548,94 @@ sub wrap_str_concat {
             }
             else {
                 push @new_tokens, $token;
+            }
+        }
+        $wrapped = 1;
+    }
+
+    return ( $wrapped, @new_tokens );
+}
+
+sub wrap_boolean {
+    my ( $self, $indent_by, $strings, $comments, @tokens ) = @_;
+
+    return ( 0, @tokens ) unless (@tokens);
+
+    my $wrapped = 0;
+    my @new_tokens;
+
+    my $base_indent = '';
+    if ( @tokens and $tokens[0] =~ $space_re ) {
+        $base_indent = shift @tokens;
+    }
+    my $indent = $indenter->add_indents( $base_indent, $indent_by );
+
+    my $do_wrap    = 0;
+    my $bool_count = 0;
+    my $tokn_count = scalar @tokens;
+    foreach my $token (@tokens) {
+        if ( uc $token eq 'AND' ) {
+            if ( not( scalar @new_tokens > 1 and uc $new_tokens[-2] eq 'BETWEEN' ) ) {
+                $bool_count++;
+            }
+        }
+        elsif ( uc $token eq 'OR' ) {
+            $bool_count++;
+        }
+        elsif ( $token eq '(' ) {
+            $tokn_count--;
+        }
+        elsif ( $token eq ')' ) {
+            $tokn_count--;
+        }
+        # TODO so we need to account for mathops?
+    }
+
+    if ( $bool_count and $tokn_count > 6 and ( $bool_count / ( $tokn_count - 3 ) ) > 0.2 ) {
+        # We're going to consider the line mostly boolean.
+        $do_wrap = 1;
+    }
+
+    # where a = b and c = d
+    # 1/(8-3) = 1/5 = 0.2
+    # where a = b and c = d and e = f
+    # 2/(12-3) = 2/9 =~ 0.222
+    # where a = b and c = d and e = f and g = h
+    # 3/(16-3) = 3/13 =~ 0.231
+    # where a = b and c = d and e = f and g = h and i = j
+    # 4/(20-3) = 4/17 =~ 0.235
+
+    if ($do_wrap) {
+
+        my $parens = 0;
+        push @new_tokens, $base_indent;
+
+        foreach my $t (@tokens) {
+            if ( $t eq '(' ) {
+                $parens++;
+                $indent = $indenter->add_indents( $base_indent, $indent_by + $parens );
+            }
+            elsif ( $t eq ')' ) {
+                $parens--;
+                $indent = $indenter->add_indents( $base_indent, $indent_by + $parens );
+            }
+
+            if ( scalar @new_tokens > 1 and $new_tokens[-2] eq "\n" ) {
+                if ( $t !~ $space_re ) {
+                    push @new_tokens, $t;
+                }
+            }
+            else {
+                if ( uc $t eq 'AND' ) {
+                    if ( not( scalar @new_tokens > 1 and uc $new_tokens[-2] eq 'BETWEEN' ) ) {
+                        push @new_tokens, "\n", $indent;
+                    }
+
+                }
+                elsif ( uc $t eq 'OR' ) {
+                    push @new_tokens, "\n", $indent;
+                }
+                push @new_tokens, $t;
             }
         }
         $wrapped = 1;
