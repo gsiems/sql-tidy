@@ -5,6 +5,7 @@ use warnings;
 
 use SQL::Tidy::Dialect;
 use SQL::Tidy::Indent;
+use SQL::Tidy::Wrap;
 
 =head1 NAME
 
@@ -24,6 +25,7 @@ my $Dialect;
 my $indenter;
 my $space_re;
 my $case_folding;
+my $Wrapper;
 
 =item new
 
@@ -41,6 +43,7 @@ sub new {
     $indenter     = SQL::Tidy::Indent->new($args);
     $space_re     = $args->{space_re};
     $case_folding = $args->{case_folding} || 'upper';
+    $Wrapper      = SQL::Tidy::Wrap->new($args);
 
     return $self;
 }
@@ -548,6 +551,9 @@ sub add_indents {
     my @eb_stack     = ();
     my $eb_depth     = 0;
 
+    # TODO: If we are dealing with a cursor definition, do we want to
+    #   indent the SQL statement?
+
     my %h = (
 
         'FUNCTION'  => 1,
@@ -714,7 +720,92 @@ sub add_indents {
         }
     }
 
-    return @new_tokens;
+    return $self->post_add_indents(@new_tokens);
+}
+
+sub post_add_indents {
+    my ( $self, @tokens ) = @_;
+
+    return @tokens unless (@tokens);
+
+    my @new_tokens = $self->format_cursor(@tokens);
+
+    return grep { defined $_ } @new_tokens;
+}
+
+sub format_cursor {
+    my ( $self, @tokens ) = @_;
+
+    return @tokens unless (@tokens);
+    return @tokens unless ( $Wrapper->find_first( 'CURSOR', @tokens ) );
+
+    my @new_tokens;
+    my $base_indent = '';
+    my $commas      = 0;
+    my $parens      = 0;
+    my $in_cursor   = 0;
+    my @cursor      = ();
+
+    foreach my $idx ( 0 .. $#tokens ) {
+        my $token      = uc $tokens[$idx];
+        my $last_token = ( $idx > 0 and defined $tokens[ $idx - 1 ] ) ? uc $tokens[ $idx - 1 ] : '';
+        my $next_token = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
+
+        if ( $token eq 'CURSOR' and ( $last_token eq "\n" or $last_token =~ $space_re ) ) {
+            $in_cursor = 1;
+            @cursor    = $tokens[$idx];
+            $parens    = 0;
+            $commas    = 0;
+            if ( $last_token =~ $space_re ) {
+                $base_indent = $last_token;
+            }
+            else {
+                $base_indent = '';
+            }
+        }
+        elsif ($in_cursor) {
+
+            push @cursor, $tokens[$idx];
+            if ( $token eq '(' ) {
+                $parens++;
+            }
+            elsif ( $token eq ')' ) {
+                $parens--;
+            }
+            elsif ( $token eq ',' ) {
+                $commas++;
+            }
+            elsif ( $token eq ';' ) {
+
+                $in_cursor = 0;
+
+                foreach my $t (@cursor) {
+                    # Ensure that an extra indent is in front of the DML statement
+                    if ( $t =~ m/^~~dml/i ) {
+
+                        if ( $new_tokens[-1] eq "\n" ) {
+                            push @new_tokens, $indenter->add_indents( $base_indent, 1 );
+                        }
+                        elsif ( $new_tokens[-1] =~ $space_re ) {
+                            $new_tokens[-1] = $indenter->add_indents( $new_tokens[-1], 1 );
+                        }
+                    }
+
+                    push @new_tokens, $t;
+
+                    # If there are two or more arguments to the cursor then wrap on commas and open parens ( two indents )
+                    if ( $commas and ( $t eq '(' or $t eq ',' ) ) {
+                        push @new_tokens, "\n", $indenter->add_indents( $base_indent, 2 );
+                    }
+                }
+            }
+        }
+        else {
+            push @new_tokens, $tokens[$idx];
+        }
+    }
+
+    return grep { defined $_ } @new_tokens;
 }
 
 =back
