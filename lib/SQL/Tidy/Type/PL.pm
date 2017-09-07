@@ -340,10 +340,15 @@ sub add_vspace {
             $line_after  = 1;
         }
         elsif ( $token eq 'EXCEPTION' or $token eq 'EXCEPTIONS' ) {
-            if ( $block_stack[-1] eq 'BEGIN' ) {
-                $block_stack[-1] = 'EXCEPTION';
+            # But only if it is the beginning of an exception block
+            # instead of a custom exception definition or something
+            my $next_token = ( $idx < $#tokens ) ? uc $tokens[ $idx + 1 ] : '';
+            if ( $next_token ne ';' ) {
+                if ( $block_stack[-1] eq 'BEGIN' ) {
+                    $block_stack[-1] = 'EXCEPTION';
+                }
+                $line_before = 2;
             }
-            $line_before = 2;
         }
         elsif ( $token eq 'RETURN' ) {
             $line_before = 1;
@@ -590,6 +595,7 @@ sub add_indents {
                 $in_proc_sig = 1;
                 $eb_depth++;
                 $eb_stack[$eb_depth] = $next_token;
+
             }
             elsif ( $next_token eq 'IF' ) {
                 $eb_depth++;
@@ -601,19 +607,21 @@ sub add_indents {
                 $eb_stack[$eb_depth] = $next_token;
             }
             elsif ( $next_token eq 'BEGIN' ) {
-                if ( $eb_stack[-1] and ( $eb_stack[-1] eq 'FUNCTION' or $eb_stack[-1] eq 'PROCEDURE' ) ) {
+                if ( @eb_stack and $eb_stack[-1] and ( $eb_stack[-1] eq 'FUNCTION' or $eb_stack[-1] eq 'PROCEDURE' ) ) {
                     $eb_stack[-1] = $next_token;
                 }
-
-                elsif ($eb_depth) {
+                elsif ( $eb_depth > -1 ) {
                     $eb_depth++;
                     $eb_stack[$eb_depth] = $next_token;
                 }
             }
             elsif ( $next_token eq 'EXCEPTION' ) {
-                $in_exception = 1;
-                if ($eb_depth) {
-                    $eb_stack[$eb_depth] = $next_token;
+                my $third_token = ( $idx + 1 < $#tokens ) ? uc $tokens[ $idx + 2 ] : '';
+                if ( $third_token ne ';' ) {
+                    $in_exception = 1;
+                    if ( $eb_depth > -1 ) {
+                        $eb_stack[$eb_depth] = $next_token;
+                    }
                 }
             }
         }
