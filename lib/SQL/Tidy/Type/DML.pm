@@ -568,7 +568,7 @@ sub add_indents {
             'UNION'     => 0,
             'MINUS'     => 0,
             'EXCEPT'    => 0,
-            'ITERSECT'  => 0,
+            'INTERSECT' => 0,
             'SELECT'    => 0,
         },
         'INSERT' => {
@@ -657,6 +657,18 @@ sub add_indents {
                         if ( uc $new_tokens[ -$i ] =~ m/^(UNION|MINUS|EXCEPT|INTERSECT)$/i ) {
                             $sub_used  = 'last';
                             $sub_token = uc $new_tokens[ -$i ];
+                        }
+                        elsif ( uc $new_tokens[ -$i ] eq 'ALL' ) {
+                            if ( $i < $#new_tokens and uc $new_tokens[ -( $i + 1 ) ] eq 'UNION' ) {
+                                $sub_used  = 'last';
+                                $sub_token = uc $new_tokens[ -( $i + 1 ) ];
+                            }
+                            elsif ( $new_tokens[ -( $i + 1 ) ] =~ m/^~~comment/i ) {
+                                if ( $i + 1 < $#new_tokens and uc $new_tokens[ -( $i + 2 ) ] eq 'UNION' ) {
+                                    $sub_used  = 'last';
+                                    $sub_token = uc $new_tokens[ -( $i + 2 ) ];
+                                }
+                            }
                         }
                         last;
                     }
@@ -1045,7 +1057,7 @@ sub convert_decode {
 
     my ( $pre, $fcn, $post ) = $Wrapper->extract_function( 'DECODE', @tokens );
 
-    while ( $#$fcn > 2) {
+    while ( $#$fcn > 2 ) {
 
         push @new_tokens, @{$pre};
 
