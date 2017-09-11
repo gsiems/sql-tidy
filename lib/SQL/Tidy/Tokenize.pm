@@ -47,7 +47,7 @@ sub tokenize_sql {
 
     ####################################################################
     # Stolen from SQL::Tokenizer
-    my $re= qr{
+    my $re = qr{
     (
         (?:--|\#)[\ \t\S]*      # single line comments
         |
@@ -83,11 +83,9 @@ sub tokenize_sql {
     )
 }smx;
 
+    my @tokens = $statement =~ m{$re}smxg;
 
-    my @tokens= $statement =~ m{$re}smxg;
-
-    @tokens= grep( !/^[\s\n\r]*$/, @tokens );
-
+    #@tokens = grep( !/^[\s\n\r]*$/, @tokens );
 
     ####################################################################
     my @new_tokens;
