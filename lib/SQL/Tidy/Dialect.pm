@@ -142,6 +142,7 @@ sub dml_keywords {
     foreach my $word (
         qw(
 
+        ALL
         AND
         AS
         BETWEEN
