@@ -2,8 +2,6 @@ package SQL::Tidy::Tokenize;
 use strict;
 use warnings;
 
-use SQL::Tokenizer;
-
 =head1 NAME
 
 SQL::Tidy::Tokenize
@@ -47,7 +45,51 @@ sub tokenize_sql {
     # TODO: carp or croak if no statement?
     return () unless ($statement);
 
-    my @tokens = SQL::Tokenizer->tokenize( $statement, 0 );
+    ####################################################################
+    # Stolen from SQL::Tokenizer
+    my $re= qr{
+    (
+        (?:--|\#)[\ \t\S]*      # single line comments
+        |
+        (?:<>|<=>|>=|<=|==|=|!=|!|<<|>>|<|>|\|\||\||&&|&|-|\+|\*(?!/)|/(?!\*)|\%|~|\^|\?)
+                                # operators and tests
+        |
+        [\[\]\(\),;.]            # punctuation (parenthesis, comma)
+        |
+        \'\'(?!\')              # empty single quoted string
+        |
+        \"\"(?!\"")             # empty double quoted string
+        |
+        "(?>(?:(?>[^"\\]+)|""|\\.)*)+"
+                                # anything inside double quotes, ungreedy
+        |
+        `(?>(?:(?>[^`\\]+)|``|\\.)*)+`
+                                # anything inside backticks quotes, ungreedy
+        |
+        '(?>(?:(?>[^'\\]+)|''|\\.)*)+'
+                                # anything inside single quotes, ungreedy.
+        |
+        /\*[\ \t\r\n\S]*?\*/      # C style comments
+        |
+        (?:[\w:@]+(?:\.(?:\w+|\*)?)*)
+                                # words, standard named placeholders, db.table.*, db.*
+        |
+        (?: \$_\$ | \$\d+ | \${1,2} )
+                                # dollar expressions - eg $_$ $3 $$
+        |
+        \n                      # newline
+        |
+        [\t\ ]+                 # any kind of white spaces
+    )
+}smx;
+
+
+    my @tokens= $statement =~ m{$re}smxg;
+
+    @tokens= grep( !/^[\s\n\r]*$/, @tokens );
+
+
+    ####################################################################
     my @new_tokens;
 
     foreach my $token (@tokens) {
@@ -63,7 +105,7 @@ sub tokenize_sql {
                     push @new_tokens, $t;
                 }
                 else {
-                    my @ts = SQL::Tokenizer->tokenize( $t, 0 );
+                    my @ts = $self->tokenize_sql( $t, 0 );
                     push @new_tokens, @ts;
                 }
             }
