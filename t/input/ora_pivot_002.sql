@@ -12,8 +12,7 @@ SELECT *
                 np_e
             FROM table_01
         )
-    PIVOT (
-            sum ( np_a ) AS np_a,
+    PIVOT ( sum ( np_a ) AS np_a,
             sum ( np_b ) AS np_b,
             sum ( np_c ) AS np_c,
             sum ( np_d ) AS np_d,
