@@ -803,17 +803,20 @@ sub format_pivot {
                 $offset ||= 1;
                 push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
             }
-            elsif ( $did_for and ( $line[ $idx - 1 ] eq '(' or $line[ $idx - 1 ] eq ',' ) ) {
-
-                if ( $new_tokens[-1] eq ' ' ) {
-                    $new_tokens[-1] = undef;
-                }
+            elsif ( $did_for and ( ( $token eq '(' and uc $new_tokens[-1] eq 'IN' ) or $token eq ',' ) ) {
                 my $offset = $parens;
                 $offset ||= 1;
-                push @new_tokens, "\n", $indenter->add_indents( $base_indent, $offset );
+                push @new_tokens, $token, "\n", $indenter->add_indents( $base_indent, $offset );
+                $token = undef;
+            }
+            elsif ( not $did_for and $parens == 1 and $token eq ',' ) {
+                push @new_tokens, $token, "\n", $indenter->add_indents( $base_indent, $parens + 1 );
+                $token = undef;
             }
         }
-        push @new_tokens, $token;
+        if ( defined $token ) {
+            push @new_tokens, $token;
+        }
     }
 
     return grep { defined $_ } @new_tokens;
