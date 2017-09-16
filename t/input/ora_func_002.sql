@@ -5,8 +5,8 @@ CREATE OR REPLACE FUNCTION testing.f_test1 (
 RETURN number
 IS
 
-    ln_standard_id number ;
-    ln_other_id number ;
+ln_standard_id number ;
+ln_other_id number ;
 
 BEGIN
 
