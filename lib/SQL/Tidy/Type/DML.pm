@@ -753,7 +753,7 @@ sub post_add_indents {
             }
             else {
 
-                if ( $Wrapper->find_first( 'DECODE', @line ) ) {
+                if ( defined $Wrapper->find_first( 'DECODE', @line ) ) {
                     @line = $self->format_decode(@line);
                 }
 
@@ -832,7 +832,7 @@ sub format_case {
     # 3. ...
 
     return @tokens unless (@tokens);
-    return @tokens unless ( $Wrapper->find_first( 'CASE', @tokens ) );
+    return @tokens unless ( defined $Wrapper->find_first( 'CASE', @tokens ) );
 
     my @new_tokens;
     my $parens      = 0;
@@ -1052,7 +1052,7 @@ sub convert_decode {
     # 1. We are scanning ALL the tokens for the DML statement
 
     return @tokens unless (@tokens);
-    return @tokens unless ( $Wrapper->find_first( 'DECODE', @tokens ) );
+    return @tokens unless ( defined $Wrapper->find_first( 'DECODE', @tokens ) );
 
     my $parens = 0;
     my $commas = 0;
@@ -1113,7 +1113,7 @@ sub convert_decode {
             }
 
             # In case of nested decodes
-            if ( $Wrapper->find_first( 'DECODE', @temp ) ) {
+            if ( decode $Wrapper->find_first( 'DECODE', @temp ) ) {
                 @temp = $self->convert_decode(@temp);
             }
         }
