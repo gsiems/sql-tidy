@@ -37,7 +37,7 @@ SELECT CASE
             WHEN ( ( table_01.column_a + table_01.column_b ) / coalesce ( table_01.column_c, 0 ) )
                     + ( ( table_02.column_a + table_02.column_b ) * coalesce ( table_02.column_c, 1 ) )
                     > ( table_03.column_a + table_03.column_b ) THEN 42
-            END AS z3
+            END AS z3,
         column_02
     FROM table_01
     JOIN table_02
