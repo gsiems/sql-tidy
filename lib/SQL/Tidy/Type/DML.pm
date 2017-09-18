@@ -1113,7 +1113,7 @@ sub convert_decode {
             }
 
             # In case of nested decodes
-            if ( decode $Wrapper->find_first( 'DECODE', @temp ) ) {
+            if ( defined $Wrapper->find_first( 'DECODE', @temp ) ) {
                 @temp = $self->convert_decode(@temp);
             }
         }
