@@ -126,6 +126,7 @@ sub line_needs_wrapping {
 sub calc_line_length {
     my ( $self, $strings, $comments, @tokens ) = @_;
 
+    @tokens = grep { defined $_ } @tokens;
     return 0 unless (@tokens);
 
     my $len = 0;
@@ -196,105 +197,411 @@ sub wrap_line {
         return @tokens;
     }
 
-    my @new_tokens = $self->_wrap_line( $strings, $comments, @tokens );
+    # 20170921 - I *think* the following might be close to good enough.
+    # The problem, of course, is now to figure out how to make it so.
+    #
+    # 1. Wrap on boolean operators before comparison operators.
+    #     Additionally, wrap boolean operators at the lowest parens count
+    #     before moving towards the highest (most deeply nested) parens
+    #     count.
+    #
+    # 3. Wrap on comparison operators before arithmetic operators.
+    #
+    # 4. Wrap on arithmetic operators. As with boolean operators, wrap
+    #     at the lowest parens count before moving towards the highest
+    #     parens count.
+    #
+    # 5. Wrap on concatenation operators.
+    #
+    # 6. That still leaves the question of where do longish "IN ( ... )"
+    #     blocks fit in this?
+    #
+    # Create an array of arrays. For each array, if it is too long, then
+    # take it to the next level of wrapping. Once each array is short
+    # enough or all wrapping functions have been exhausted then declare
+    # it done, add new lines/indentation and call it wrapped.
+    #
+    # Each wrapping function needs to know how much initial indent there
+    # is, how much to indent the wraps, and which tokens it is operating
+    # on. Strings and comments are also needed so that their length may
+    # be included in line length calculations.
 
-    # TODO: If needed, THIS is the place to iterate the overly long line...
+    my @new_tokens  = ();
+    my $indent_size = 1;
+
+    my $base_indent = '';
+    if ( @tokens and $tokens[0] =~ $space_re ) {
+        $base_indent = shift @tokens;
+        push @new_tokens, $base_indent;
+    }
+
+    my @start;
+    my @start2;
+    my @acc;
+    my $parens = 0;
+
+    my $idx_when = $self->find_first( 'WHEN', @tokens );
+    my $idx_then = $self->find_first( 'THEN', @tokens );
+
+    if (    defined $idx_when
+        and $idx_when < 2
+        and defined $idx_then
+        and $idx_then < $#tokens )
+    {
+
+        @start = $self->split_tokens( 'THEN', 2, @tokens );
+    }
+    else {
+        push @start, \@tokens;
+    }
+
+    foreach my $line (@start) {
+
+        my ( $pre, $fcn, $post ) = $self->extract_function( 'IN', @{$line} );
+        if ( $fcn and @{$fcn}[0] ) {
+
+            my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+            my $line_length = $self->calc_line_length( $strings, $comments, @{$fcn} );
+            $indent_size += scalar grep { $_ eq '(' } @{$pre};
+            $indent_size -= scalar grep { $_ eq ')' } @{$pre};
+
+            if (    $line_length > $min_line_width
+                and $line_length + length($indent) >= $max_line_width )
+            {
+
+                while ( @{$fcn}[0] ne '(' ) {
+                    push @{$pre}, shift @{$fcn};
+                }
+                push @{$pre}, shift @{$fcn};
+                $indent_size++;
+
+                push @start2, $pre;
+
+                my @lines = $self->wrap_csv(
+                    {
+                        indent_size => $indent_size,
+                        base_indent => $base_indent,
+                        strings     => $strings,
+                        comments    => $comments,
+                        tokens      => $fcn,
+                    }
+                );
+
+                foreach my $idx ( 0 .. $#lines ) {
+                    if ( @{ $lines[$idx] }[0] eq ' ' ) {
+                        shift @{ $lines[$idx] };
+                    }
+                    if ( $idx == $#lines ) {
+                        if ( $post and defined @{$post}[0] ) {
+                            push @{ $lines[$idx] }, @{$post};
+                        }
+                    }
+
+                    push @start2, $lines[$idx];
+                }
+            }
+            else {
+                push @start2, $line;
+            }
+        }
+        else {
+            push @start2, $line;
+        }
+    }
+
+    foreach my $line (@start2) {
+
+        my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+        my $line_length = $self->calc_line_length( $strings, $comments, @{$line} );
+
+        if (   $line_length < $min_line_width
+            or $line_length + length($indent) < $max_line_width )
+        {
+            push @acc, $line;
+        }
+        else {
+
+            my %comp_ops = map { $_ => $_ } ( 'AND', 'OR' );
+            my @lines = $self->wrap_ops(
+                {
+                    indent_size => $indent_size + $parens,
+                    base_indent => $base_indent,
+                    strings     => $strings,
+                    comments    => $comments,
+                    tokens      => $line,
+                    ops         => \%comp_ops,
+                }
+            );
+
+            foreach my $line (@lines) {
+                my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+                my $line_length = $self->calc_line_length( $strings, $comments, @{$line} );
+                $parens += scalar grep { $_ eq '(' } @{$line};
+                $parens -= scalar grep { $_ eq ')' } @{$line};
+
+                if (   $line_length < $min_line_width
+                    or $line_length + length($indent) < $max_line_width )
+                {
+                    push @acc, $line;
+                }
+                else {
+                    my %comp_ops = map { $_ => $_ } ( '=', '==', '<', '>', '<>', '!=', '>=', '<=' );
+                    my @lines = $self->wrap_ops(
+                        {
+                            indent_size => $indent_size + $parens,
+                            base_indent => $base_indent,
+                            strings     => $strings,
+                            comments    => $comments,
+                            tokens      => $line,
+                            ops         => \%comp_ops,
+                        }
+                    );
+
+                    foreach my $line (@lines) {
+                        my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+                        my $line_length = $self->calc_line_length( $strings, $comments, @{$line} );
+                        $parens += scalar grep { $_ eq '(' } @{$line};
+                        $parens -= scalar grep { $_ eq ')' } @{$line};
+
+                        if (   $line_length < $min_line_width
+                            or $line_length + length($indent) < $max_line_width )
+                        {
+                            push @acc, $line;
+                        }
+                        else {
+                            my %math_ops = map { $_ => $_ } ( '+', '-', '*', '/' );
+                            # TODO: add the rest of the math ops?
+                            # What would that be? Probably not the
+                            # modulo.. or would it. Exponent.
+
+                            my @lines = $self->wrap_ops(
+                                {
+                                    indent_size => $indent_size + $parens,
+                                    base_indent => $base_indent,
+                                    strings     => $strings,
+                                    comments    => $comments,
+                                    tokens      => $line,
+                                    ops         => \%math_ops,
+                                }
+                            );
+
+                            foreach my $line (@lines) {
+                                my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+                                my $line_length = $self->calc_line_length( $strings, $comments, @{$line} );
+                                $parens += scalar grep { $_ eq '(' } @{$line};
+                                $parens -= scalar grep { $_ eq ')' } @{$line};
+
+                                if (   $line_length < $min_line_width
+                                    or $line_length + length($indent) < $max_line_width )
+                                {
+                                    push @acc, $line;
+                                }
+                                else {
+                                    my @lines = $self->wrap_ops(
+                                        {
+                                            indent_size => $indent_size + $parens,
+                                            base_indent => $base_indent,
+                                            strings     => $strings,
+                                            comments    => $comments,
+                                            tokens      => $line,
+                                            ops         => { '||' => '||' },
+                                        }
+                                    );
+
+                                    foreach my $line (@lines) {
+                                        #my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+                                        #my $line_length = $self->calc_line_length( $strings, $comments, @{$line} );
+                                        #$parens += scalar grep { $_ eq '(' } @{$line};
+                                        #$parens -= scalar grep { $_ eq ')' } @{$line};
+
+                                        push @acc, $line;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    $parens = 0;
+    foreach my $idx ( 0 .. $#acc ) {
+
+        if ( $idx > 0 ) {
+            my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+            push @new_tokens, "\n", $indent;
+        }
+
+        my @ary = @{ $acc[$idx] };
+        foreach my $tok (@ary) {
+            if ( $tok eq '(' ) {
+                $parens++;
+            }
+            elsif ( $tok eq ')' ) {
+                $parens--;
+            }
+            push @new_tokens, $tok;
+        }
+    }
 
     return @new_tokens;
 }
 
-sub _wrap_line {
-    my ( $self, $strings, $comments, @tokens ) = @_;
+sub wrap_ops {
+    my ( $self, $args ) = @_;
 
-    return @tokens unless (@tokens);
+    my $indent_size = ( defined $args->{indent_size} ) ? $args->{indent_size} : 1;
+    my $strings     = $args->{strings};
+    my $comments    = $args->{comments};
+    my $level       = $args->{level} || 0;
+    my $max_level   = $args->{max_level} || 0;
+    my @tokens      = @{ $args->{tokens} };
+    my %ops         = %{ $args->{ops} };
 
-    my @new_tokens = ();
-
-    my $base_indent = '';
-    if ( @tokens and $tokens[0] =~ $space_re ) {
-        $base_indent = $tokens[0];
-    }
-
-    my $wrapped = 0;
-
-    # TODO: IF this is called more than once, or processes a WHEN
-    # ... THEN (or decode, or ???) then there is the matter of adjusting
-    # the indent based on the kind of line being wrapped. Initial line
-    # from wrapped lines get one or two additional indents while
-    # following wrapped lines may get none (depending on the kind of wrap).
-
-    # For WHEN ... THEN
-    # Wrap on THEN IIF it will make the left-hand side short enough
-    # AND the right-hand side is longer than x tokens OR y characters
-    if ( not $wrapped ) {
-        my @temp;
-        ( $wrapped, @temp ) = $self->wrap_when_then( $strings, $comments, @tokens );
-        if ($wrapped) {
-            push @new_tokens, @temp;
+    my $base_offset = 0;
+    my $base_indent = $args->{base_indent};
+    if ( not defined $base_indent ) {
+        if ( @tokens and $tokens[0] =~ $space_re ) {
+            $base_indent = $tokens[0];
+            $base_offset = length($base_indent);
+        }
+        else {
+            $base_indent = '';
         }
     }
 
-    # For ... AND|OR ... AND|OR ...
-    if ( not $wrapped ) {
-        my @temp;
-        ( $wrapped, @temp ) = $self->wrap_boolean( $strings, $comments, @tokens );
-        if ($wrapped) {
-            push @new_tokens, @temp;
-        }
-    }
+    my $indent = $indenter->add_indents( $base_indent, $indent_size );
+    my $line_length = $self->calc_line_length( $strings, $comments, @tokens ) - $base_offset;
+    $indent_size += scalar grep { $_ eq '(' } @tokens;
+    $indent_size -= scalar grep { $_ eq ')' } @tokens;
 
-    # IN clauses
-    # For IN clauses, if the number of the items in the list is long
-    # enough then wrap the list.
-    if ( not $wrapped ) {
-        my @temp;
-        ( $wrapped, @temp ) = $self->wrap_in_clause( $strings, $comments, @tokens );
-        if ($wrapped) {
-            push @new_tokens, @temp;
-        }
-    }
+    my @new_tokens;
 
-    # "Balanced Parens"
-    # IIF there are groups of tokens that are surrounded by parens and
-    # the spaces between the parens are either math, boolean, or
-    # concatenation operators then wrap before the operators.
-    if ( not $wrapped ) {
-        my @temp;
-        ( $wrapped, @temp ) = $self->wrap_balanced_parens( $strings, $comments, @tokens );
-        if ($wrapped) {
-            push @new_tokens, @temp;
-        }
-    }
-
-    # Wrap concatenated strings
-    if ( not $wrapped ) {
-        my @temp;
-        ( $wrapped, @temp ) = $self->wrap_str_concat( $strings, $comments, @tokens );
-        if ($wrapped) {
-            push @new_tokens, @temp;
-        }
-    }
-
-    # Wrap parenthetic_list
-    # Much like "wrap IN" above but for things other than IN
-    if ( not $wrapped ) {
-        my @temp;
-        ( $wrapped, @temp ) = $self->wrap_paren_list( $strings, $comments, @tokens );
-        if ($wrapped) {
-            push @new_tokens, @temp;
-        }
-    }
-
-    if ($wrapped) {
-        if ( $base_indent and $new_tokens[0] !~ $space_re ) {
-            unshift @new_tokens, $base_indent;
-        }
+    if (
+        not(    $line_length > $min_line_width
+            and $line_length + length($indent) >= $max_line_width
+            and ( grep { $ops{$_} } @tokens ) )
+        )
+    {
+        push @new_tokens, \@tokens;
     }
     else {
-        @new_tokens = @tokens;
+        my $line_no = 0;
+        my $parens  = 0;
+        my @temp;
+
+        foreach my $idx ( 0 .. $#tokens ) {
+            my $token = uc $tokens[$idx];
+            if ( $token eq '(' ) {
+                $parens++;
+            }
+            elsif ( $token eq ')' ) {
+                $parens--;
+            }
+            elsif ( $parens == $level ) {
+                if ( exists $ops{$token} ) {
+
+                    # Special case for 'AND' ops:
+                    # Do not wrap on "BETWEEN x AND y"
+                    # Do not wrap on things like "BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW"
+                    if ( $token eq 'AND' ) {
+                        if ( $idx > 1 and $tokens[ $idx - 2 ] =~ m/^(PRECEDING|FOLLOWING|ROW)$/i ) {
+                            # no wrap
+                        }
+                        elsif ( $idx > 3 and uc $tokens[ $idx - 4 ] eq 'BETWEEN' ) {
+                            # no wrap
+                        }
+                        else {
+                            $line_no++;
+                        }
+                    }
+                    else {
+                        $line_no++;
+                    }
+                }
+            }
+            push @{ $temp[$line_no] }, $tokens[$idx];
+        }
+
+        foreach my $idx ( 0 .. $#temp ) {
+            unless ( $temp[$idx] ) {
+                next;
+            }
+
+            if ( $self->find_first( '(', @{ $temp[$idx] } ) ) {
+
+                my @ret = $self->wrap_ops(
+                    {
+                        indent_size => $indent_size,
+                        base_indent => $base_indent,
+                        level       => $level + 1,
+                        strings     => $strings,
+                        comments    => $comments,
+                        tokens      => $temp[$idx],
+                        ops         => \%ops,
+                    }
+                );
+
+                foreach my $line (@ret) {
+                    push @new_tokens, $line;
+                }
+            }
+            else {
+                push @new_tokens, $temp[$idx];
+            }
+        }
+    }
+    return @new_tokens;
+}
+
+sub wrap_csv {
+    my ( $self, $args ) = @_;
+
+    my $indent_size = ( defined $args->{indent_size} ) ? $args->{indent_size} : 1;
+    my $strings     = $args->{strings};
+    my $comments    = $args->{comments};
+    my @tokens      = @{ $args->{tokens} };
+
+    # TODO: allow for "skinny" version (one element per line) vs.
+    # "compact" version (current behavior)
+
+    my $base_indent = $args->{base_indent};
+    if ( not defined $base_indent ) {
+        if ( @tokens and $tokens[0] =~ $space_re ) {
+            $base_indent = $tokens[0];
+        }
     }
 
-    return grep { $_ ne '' } @new_tokens;
+    my $indent = $indenter->add_indents( $base_indent, $indent_size );
+    my $line_length = $self->calc_line_length( $strings, $comments, @tokens ) - length($indent);
+
+    my @new_tokens;
+    my $idx = 0;
+
+    if (
+        not(    $line_length > $min_line_width
+            and $line_length + length($base_indent) >= $max_line_width )
+        )
+    {
+        push @new_tokens, \@tokens;
+    }
+    else {
+
+        foreach my $token (@tokens) {
+            $line_length =
+                $self->calc_line_length( $strings, $comments, @{ $new_tokens[$idx] }, $token, ',' ) + length($indent);
+
+            if ( $token eq ',' ) {
+                # just make sure we don't wrap before the comma
+            }
+            elsif ( $line_length >= $max_line_width ) {
+                $idx++;
+            }
+            push @{ $new_tokens[$idx] }, $token;
+        }
+    }
+    return @new_tokens;
 }
 
 sub wrap_in_clause {
@@ -357,408 +664,6 @@ sub wrap_in_clause {
         }
     }
     return ( $wrapped, @new_tokens );
-}
-
-sub wrap_when_then {
-    my ( $self, $strings, $comments, @tokens ) = @_;
-
-    return ( 0, @tokens ) unless (@tokens);
-
-    my $wrapped = 0;
-    my @new_tokens;
-
-    my $base_indent = '';
-    if ( @tokens and $tokens[0] =~ $space_re ) {
-        $base_indent = shift @tokens;
-    }
-
-    my $idx_when = $self->find_first( 'WHEN', @tokens );
-    my $idx_then = $self->find_first( 'THEN', @tokens );
-
-    if (    defined $idx_when
-        and $idx_when < 2
-        and defined $idx_then
-        and $idx_then < $#tokens )
-    {
-
-        my @pre;
-        my @post;
-
-        foreach my $token (@tokens) {
-            if ( @pre and uc $pre[-1] eq 'THEN' ) {
-                push @post, $token;
-            }
-            else {
-                push @pre, $token;
-            }
-        }
-
-        if ( not $self->line_needs_wrapping( $strings, $comments, @pre ) ) {
-            my $len = $self->calc_line_length( $strings, $comments, @post );
-            if ( scalar @post > 4 or $len > 40 ) {
-                # wrap
-                push @new_tokens, @pre;
-                push @new_tokens, "\n", $indenter->add_indents( $base_indent, 1 );
-                if ( $post[0] eq ' ' ) {
-                    shift @post;
-                }
-
-                push @new_tokens, @post;
-                $wrapped = 1;
-            }
-        }
-    }
-    return ( $wrapped, @new_tokens );
-}
-
-sub wrap_balanced_parens {
-    my ( $self, $strings, $comments, @tokens ) = @_;
-
-    return ( 0, @tokens ) unless (@tokens);
-
-    my $wrapped = 0;
-    my @new_tokens;
-
-    my $base_indent = '';
-    if ( @tokens and $tokens[0] =~ $space_re ) {
-        $base_indent = shift @tokens;
-    }
-
-    push @new_tokens, $base_indent;
-    my %test = map { $_ => 1 } ( '+', '-', '*', '/', 'AND', 'OR', '||' );
-
-    my @idxs;
-    my @ary = $self->extract_balanced_parens(@tokens);
-    if ( scalar @ary > 2 ) {
-
-        my @temp;
-        foreach my $idx ( 0 .. $#ary ) {
-            my @toks = @{ $ary[$idx] };
-            if ( $toks[0] eq '(' ) {
-                push @temp, @toks;
-                push @idxs, $idx;
-            }
-            else {
-
-                foreach my $ti ( 0 .. $#toks ) {
-                    my $token = $toks[$ti];
-                    next unless ( defined $token );
-                    if ( exists $test{ uc $token } ) {
-                        push @temp, "\n", $indenter->add_indents( $base_indent, 1 );
-                        $wrapped = 1;
-                    }
-                    if ( defined $token ) {
-                        push @temp, $token;
-                    }
-                }
-            }
-        }
-
-        if ( not $wrapped and scalar @ary < 4 and scalar @idxs == 1 ) {
-            # if not wrapped
-            # and there are three (or fewer) @ary elements
-            # and only one is wrapped in parens
-            # ... we *could* recurse this... but that might be crazy
-            @temp = ();
-            foreach my $idx ( 0 .. $#ary ) {
-                if ( $idx != $idxs[0] ) {
-                    push @temp, @{ $ary[$idx] };
-                }
-                else {
-                    my @toks = @{ $ary[$idx] };
-
-                    # Strip the wrapping parens and re-try the wrapping
-                    push @temp, '(', "\n", $indenter->add_indents( $base_indent, 1 );
-                    shift @toks;
-                    if ( $toks[0] eq ' ' ) {
-                        shift @toks;
-                    }
-                    pop @toks;
-
-                    my @ary2 = $self->extract_balanced_parens(@toks);
-                    if ( scalar @ary2 > 2 ) {
-                        foreach my $idx2 ( 0 .. $#ary2 ) {
-                            my @toks2 = @{ $ary2[$idx2] };
-                            if ( $toks2[0] eq '(' ) {
-                                push @temp, @toks2;
-                            }
-                            else {
-                                foreach my $ti ( 0 .. $#toks2 ) {
-                                    my $token = $toks2[$ti];
-                                    if ( exists $test{ uc $token } ) {
-                                        push @temp, "\n", $indenter->add_indents( $base_indent, 1 );
-                                        $wrapped = 1;
-                                    }
-                                    push @temp, $token;
-                                }
-                            }
-                        }
-                    }
-                    push @temp, ')';
-                }
-            }
-        }
-        if ($wrapped) {
-            push @new_tokens, @temp;
-        }
-    }
-    if ($wrapped) {
-        return ( $wrapped, @new_tokens );
-    }
-    else {
-        return ( 0, @tokens );
-    }
-}
-
-sub wrap_str_concat {
-    my ( $self, $strings, $comments, @tokens ) = @_;
-
-    return ( 0, @tokens ) unless (@tokens);
-
-    my $wrapped = 0;
-    my @new_tokens;
-
-    my $base_indent = '';
-    if ( @tokens and $tokens[0] =~ $space_re ) {
-        $base_indent = shift @tokens;
-    }
-    my $indent = $indenter->add_indents( $base_indent, 1 );
-
-    if ( $self->find_first( '||', @tokens ) ) {
-
-        foreach my $token (@tokens) {
-
-            if ( $token eq '||' ) {
-                push @new_tokens, "\n", $indent;
-            }
-
-            if ( scalar @new_tokens > 1 and $new_tokens[-2] eq "\n" ) {
-                if ( $token !~ $space_re ) {
-                    push @new_tokens, $token;
-                }
-            }
-            else {
-                push @new_tokens, $token;
-            }
-        }
-        $wrapped = 1;
-    }
-
-    return ( $wrapped, @new_tokens );
-}
-
-sub wrap_boolean {
-    my ( $self, $strings, $comments, @tokens ) = @_;
-
-    return ( 0, @tokens ) unless (@tokens);
-
-    my $wrapped = 0;
-    my @new_tokens;
-
-    my $base_indent = '';
-    if ( @tokens and $tokens[0] =~ $space_re ) {
-        $base_indent = shift @tokens;
-    }
-    my $indent = $indenter->add_indents( $base_indent, 1 );
-
-    my $do_wrap    = 0;
-    my $bool_count = 0;
-    my $tokn_count = scalar @tokens;
-    foreach my $token (@tokens) {
-        if ( uc $token eq 'AND' ) {
-            if ( not( scalar @tokens > 1 and uc $tokens[-2] eq 'BETWEEN' ) ) {
-                $bool_count++;
-            }
-        }
-        elsif ( uc $token eq 'OR' ) {
-            $bool_count++;
-        }
-        elsif ( $token eq '(' ) {
-            $tokn_count--;
-        }
-        elsif ( $token eq ')' ) {
-            $tokn_count--;
-        }
-        # TODO so we need to account for mathops?
-    }
-
-    if ( $bool_count and $tokn_count > 6 and ( $bool_count / ( $tokn_count - 3 ) ) > 0.2 ) {
-        # We're going to consider the line mostly boolean.
-        $do_wrap = 1;
-    }
-
-    # where a = b and c = d
-    # 1/(8-3) = 1/5 = 0.2
-    # where a = b and c = d and e = f
-    # 2/(12-3) = 2/9 =~ 0.222
-    # where a = b and c = d and e = f and g = h
-    # 3/(16-3) = 3/13 =~ 0.231
-    # where a = b and c = d and e = f and g = h and i = j
-    # 4/(20-3) = 4/17 =~ 0.235
-
-    if ($do_wrap) {
-
-        my $parens = 0;
-        push @new_tokens, $base_indent;
-
-        foreach my $t (@tokens) {
-            if ( $t eq '(' ) {
-                $parens++;
-                $indent = $indenter->add_indents( $base_indent, $parens + 1 );
-            }
-            elsif ( $t eq ')' ) {
-                $parens--;
-                $indent = $indenter->add_indents( $base_indent, $parens + 1 );
-            }
-
-            if ( scalar @new_tokens > 1 and $new_tokens[-2] eq "\n" ) {
-                if ( $t !~ $space_re ) {
-                    push @new_tokens, $t;
-                }
-            }
-            else {
-                if ( uc $t eq 'AND' ) {
-                    if ( scalar @new_tokens > 1 ) {
-                        foreach my $i ( 1 .. $#new_tokens ) {
-                            my $lastok = $new_tokens[ -$i ];
-
-                            next if ( $lastok =~ $space_re );
-                            next if ( $lastok =~ /^~~comment/i );
-                            next if ( $lastok eq "\n" );
-                            if ( uc $lastok ne 'BETWEEN' ) {
-                                push @new_tokens, "\n", $indent;
-                                $wrapped = 1;
-                            }
-                            last;
-                        }
-                    }
-                    else {
-                        push @new_tokens, "\n", $indent;
-                    }
-                }
-                elsif ( uc $t eq 'OR' ) {
-                    push @new_tokens, "\n", $indent;
-                }
-                push @new_tokens, $t;
-            }
-        }
-        $wrapped = 1;
-    }
-
-    return ( $wrapped, @new_tokens );
-}
-
-sub wrap_paren_list {
-    my ( $self, $strings, $comments, @tokens ) = @_;
-
-    return ( 0, @tokens ) unless (@tokens);
-
-    my $wrapped = 0;
-    my @new_tokens;
-
-    my $base_indent = '';
-    if ( @tokens and $tokens[0] =~ $space_re ) {
-        $base_indent = shift @tokens;
-    }
-    my $indent = $indenter->add_indents( $base_indent, 1 );
-
-    my $do_wrap = 0;
-
-    if ( join( ' ', @tokens ) =~ m/ +\((.+,){4}.+\)/i ) {
-        $do_wrap = 1;
-    }
-
-    # Or lists with fewer than four items that are none-the-less rather long...
-
-    if ($do_wrap) {
-        # We appear to have a " ( list, of, four or more, things )"
-
-        # TODO: How to deal with nested parens... or two sets of parens in the same line
-        # if '(' then "(", "\n", indent++
-        # if ',' then ",", "\n", indent
-        # if ')' then ")", "\n", indent--
-
-        my $parens = 0;
-        push @new_tokens, $base_indent;
-
-        foreach my $t (@tokens) {
-            if ( scalar @new_tokens > 1 and $new_tokens[-2] eq "\n" ) {
-                if ( $t !~ $space_re ) {
-                    push @new_tokens, $t;
-                }
-            }
-            else {
-                push @new_tokens, $t;
-            }
-
-            if ( $t eq ',' ) {
-                push @new_tokens, "\n", $indent;
-            }
-            elsif ( $t eq '(' ) {
-                $parens++;
-                $indent = $indenter->add_indents( $base_indent, $parens + 1 );
-                push @new_tokens, "\n", $indent;
-            }
-            elsif ( $t eq ')' ) {
-                $parens--;
-                $indent = $indenter->add_indents( $base_indent, $parens + 1 );
-                # TODO: To wrap after the closing parens or not to wrap after the closing parens...
-            }
-        }
-        $wrapped = 1;
-    }
-
-    return ( $wrapped, @new_tokens );
-}
-
-sub extract_balanced_parens {
-    my ( $self, @tokens ) = @_;
-
-=pod
-should return:
-
-list of tokens that have a function x
-( parm parm parm nested-function x ( parm parm ) parm )
-plus another function x
-( parm parm )
-and then some other stuff
-
-=cut
-
-    my @return;
-    my @ary     = ();
-    my $parens  = 0;
-    my $idx_ret = 0;
-
-    foreach my $idx ( 0 .. $#tokens ) {
-
-        if ( $tokens[$idx] eq '(' ) {
-            if ( $parens == 0 and @ary ) {
-                push @{ $return[$idx_ret] }, $_ for @ary;
-                $idx_ret++;
-                @ary = ();
-            }
-            $parens++;
-        }
-
-        push @ary, $tokens[$idx];
-
-        if ( $tokens[$idx] eq ')' ) {
-            $parens--;
-            if ( $parens == 0 and @ary ) {
-                push @{ $return[$idx_ret] }, $_ for @ary;
-                $idx_ret++;
-                @ary = ();
-            }
-        }
-
-    }
-
-    if (@ary) {
-        push @{ $return[$idx_ret] }, $_ for @ary;
-    }
-
-    return @return;
 }
 
 sub extract_function {
@@ -872,6 +777,40 @@ sub format_window_fcn {
     }
 
     return grep { defined $_ } @new_tokens;
+}
+
+sub regexp_split_tokens {
+    my ( $self, $re, $limit, @tokens ) = @_;
+    my @return;
+    my $idx = 0;
+
+    foreach my $token (@tokens) {
+        if ( $token =~ m/$re/i ) {
+            if ( $idx < $limit or $limit == 0 ) {
+                $idx++;
+            }
+        }
+        push @{ $return[$idx] }, $token;
+    }
+
+    return @return;
+}
+
+sub split_tokens {
+    my ( $self, $key, $limit, @tokens ) = @_;
+    my @return;
+    my $idx = 0;
+
+    foreach my $token (@tokens) {
+        if ( uc $token eq uc $key ) {
+            if ( $idx < $limit or $limit == 0 ) {
+                $idx++;
+            }
+        }
+        push @{ $return[$idx] }, $token;
+    }
+
+    return @return;
 }
 
 1;
