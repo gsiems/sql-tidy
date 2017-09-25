@@ -1,8 +1,8 @@
 -- Nested CASE statements, CASE statements with comments
 SELECT 'a',
         CASE
-            WHEN substr ( table_1.id, 1, 2 ) = 'SA' THEN
-                'SA' || lpad ( substr ( table_1.id, instr ( table_1.id, 'A' ) + 1 ), 7, '0' )
+            WHEN substr ( table_1.id, 1, 2 ) = 'SA'
+                THEN 'SA' || lpad ( substr ( table_1.id, instr ( table_1.id, 'A' ) + 1 ), 7, '0' )
             ELSE table_1.id
             END || ' - ' || substr ( table_3.name, 1, 52 ) AS title_desc,
         CASE max ( table_2.code_a )
@@ -31,8 +31,8 @@ SELECT 'a',
                     END
             END AS act_stat_cd,
         CASE
-            WHEN max ( table_2.code_a ) IN ( 'CODEA', 'CODEB' ) THEN
-                coalesce ( max ( table_2.end_date ), max ( table_2.start_date ), max ( table_2.created_date ) )
+            WHEN max ( table_2.code_a ) IN ( 'CODEA', 'CODEB' )
+                THEN coalesce ( max ( table_2.end_date ), max ( table_2.start_date ), max ( table_2.created_date ) )
             ELSE coalesce ( max ( table_2.start_date ), max ( table_2.created_date ) )
             END AS act_stat_dt,
         max ( updated_date ),
@@ -44,8 +44,8 @@ SELECT 'a',
 --
 SELECT 'a',
         CASE
-            WHEN substr ( table_1.id, 1, 2 ) = 'SA' THEN
-                'SA' || lpad ( substr ( table_1.id, instr ( table_1.id, 'A' ) + 1 ), 7, '0' )
+            WHEN substr ( table_1.id, 1, 2 ) = 'SA'
+                THEN 'SA' || lpad ( substr ( table_1.id, instr ( table_1.id, 'A' ) + 1 ), 7, '0' )
             ELSE table_1.id
             END || ' - ' || substr ( table_3.name, 1, 52 ) AS title_desc,
         CASE
@@ -61,8 +61,8 @@ SELECT 'a',
             ELSE '100'
             END AS act_stat_cd,
         CASE -- Just saying...
-            WHEN max ( table_2.code_a ) IN ( 'CODEA', 'CODEB' ) THEN
-                coalesce ( max ( table_2.end_date ), max ( table_2.start_date ), max ( table_2.created_date ) )
+            WHEN max ( table_2.code_a ) IN ( 'CODEA', 'CODEB' )
+                THEN coalesce ( max ( table_2.end_date ), max ( table_2.start_date ), max ( table_2.created_date ) )
             ELSE coalesce ( max ( table_2.start_date ), max ( table_2.created_date ) )
             END AS act_stat_dt,
         max ( updated_date ),
@@ -71,3 +71,4 @@ SELECT 'a',
     FROM schema_1.table_2
     JOIN schema_1.table_3
         ON ( table_2.id = table_3.id ) ;
+

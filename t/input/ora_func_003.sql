@@ -5,18 +5,18 @@ CREATE OR REPLACE FUNCTION testing.f_test1 (
 RETURN number
 IS
 
-    ln_standard_id number ;
-    ln_other_id number ;
-    cursor c_foo IS
-        SELECT 1
-            FROM dual ;
+ln_standard_id number ;
+ln_other_id number ;
+cursor c_foo IS
+    SELECT 1
+        FROM dual ;
 
-    cursor c_bar (
-            arg1,
-            arg2 ) IS
-        SELECT 1
-            FROM tripple
-            WHERE col = arg1 ;
+cursor c_bar (
+        arg1,
+        arg2 ) IS
+    SELECT 1
+        FROM tripple
+        WHERE col = arg1 ;
 
 BEGIN
 

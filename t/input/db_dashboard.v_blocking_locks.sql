@@ -12,8 +12,8 @@ SELECT waiter.sid AS waiting_sid,
         blocker.machine AS blocking_machine,
         blocker.program AS blocking_program,
         CASE
-            WHEN obj.owner IS NOT NULL THEN
-                CAST ( substr ( obj.owner || '.' || obj.object_name, 1, 60 ) AS varchar2 ( 60 ) )
+            WHEN obj.owner IS NOT NULL
+                THEN CAST ( substr ( obj.owner || '.' || obj.object_name, 1, 60 ) AS varchar2 ( 60 ) )
             END AS locked_object,
         CAST ( substr ( sql.sql_fulltext, 1, 4000 ) AS varchar2 ( 4000 char ) ) AS blocking_sql_text
     FROM v$session waiter

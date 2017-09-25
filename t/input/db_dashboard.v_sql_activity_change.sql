@@ -18,13 +18,13 @@ SELECT DISTINCT coalesce ( c.username, sql.parsing_schema_name ) AS username,
             ELSE c.executions
             END AS executions,
         CASE
-            WHEN c.elapsed_time - coalesce ( p.elapsed_time, 0 ) >= 0 THEN
-                c.elapsed_time - coalesce ( p.elapsed_time, 0 )
+            WHEN c.elapsed_time - coalesce ( p.elapsed_time, 0 ) >= 0
+                THEN c.elapsed_time - coalesce ( p.elapsed_time, 0 )
             ELSE c.elapsed_time
             END AS elapsed_time,
         CASE
-            WHEN c.rows_processed - coalesce ( p.rows_processed, 0 ) >= 0 THEN
-                c.rows_processed - coalesce ( p.rows_processed, 0 )
+            WHEN c.rows_processed - coalesce ( p.rows_processed, 0 ) >= 0
+                THEN c.rows_processed - coalesce ( p.rows_processed, 0 )
             ELSE c.rows_processed
             END AS rows_processed,
         c.sharable_mem,
@@ -35,8 +35,8 @@ SELECT DISTINCT coalesce ( c.username, sql.parsing_schema_name ) AS username,
             ELSE c.disk_reads
             END AS disk_reads,
         CASE
-            WHEN c.direct_writes - coalesce ( p.direct_writes, 0 ) >= 0 THEN
-                c.direct_writes - coalesce ( p.direct_writes, 0 )
+            WHEN c.direct_writes - coalesce ( p.direct_writes, 0 ) >= 0
+                THEN c.direct_writes - coalesce ( p.direct_writes, 0 )
             ELSE c.direct_writes
             END AS direct_writes,
         CASE
@@ -48,28 +48,28 @@ SELECT DISTINCT coalesce ( c.username, sql.parsing_schema_name ) AS username,
             ELSE c.cpu_time
             END AS cpu_time,
         CASE
-            WHEN c.physical_read_requests - coalesce ( p.physical_read_requests, 0 ) >= 0 THEN
-                c.physical_read_requests - coalesce ( p.physical_read_requests, 0 )
+            WHEN c.physical_read_requests - coalesce ( p.physical_read_requests, 0 ) >= 0
+                THEN c.physical_read_requests - coalesce ( p.physical_read_requests, 0 )
             ELSE c.physical_read_requests
             END AS physical_read_requests,
         CASE
-            WHEN c.physical_read_bytes - coalesce ( p.physical_read_bytes, 0 ) >= 0 THEN
-                c.physical_read_bytes - coalesce ( p.physical_read_bytes, 0 )
+            WHEN c.physical_read_bytes - coalesce ( p.physical_read_bytes, 0 ) >= 0
+                THEN c.physical_read_bytes - coalesce ( p.physical_read_bytes, 0 )
             ELSE c.physical_read_bytes
             END AS physical_read_bytes,
         CASE
-            WHEN c.physical_write_requests - coalesce ( p.physical_write_requests, 0 ) >= 0 THEN
-                c.physical_write_requests - coalesce ( p.physical_write_requests, 0 )
+            WHEN c.physical_write_requests - coalesce ( p.physical_write_requests, 0 ) >= 0
+                THEN c.physical_write_requests - coalesce ( p.physical_write_requests, 0 )
             ELSE c.physical_write_requests
             END AS physical_write_requests,
         CASE
-            WHEN c.physical_write_bytes - coalesce ( p.physical_write_bytes, 0 ) >= 0 THEN
-                c.physical_write_bytes - coalesce ( p.physical_write_bytes, 0 )
+            WHEN c.physical_write_bytes - coalesce ( p.physical_write_bytes, 0 ) >= 0
+                THEN c.physical_write_bytes - coalesce ( p.physical_write_bytes, 0 )
             ELSE c.physical_write_bytes
             END AS physical_write_bytes,
         CASE
-            WHEN c.session_logical_io - coalesce ( p.session_logical_io, 0 ) >= 0 THEN
-                c.session_logical_io - coalesce ( p.session_logical_io, 0 )
+            WHEN c.session_logical_io - coalesce ( p.session_logical_io, 0 ) >= 0
+                THEN c.session_logical_io - coalesce ( p.session_logical_io, 0 )
             ELSE c.session_logical_io
             END AS session_logical_io,
         CAST ( substr ( sql.sql_fulltext, 1, 4000 ) AS varchar2 ( 4000 char ) ) AS sql_text

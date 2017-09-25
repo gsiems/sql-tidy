@@ -74,9 +74,8 @@ SELECT current_database (),
                                         WHEN tbl.relhasoids THEN 4
                                         ELSE 0
                                         END AS tpl_hdr_size,
-                                sum (
-                                    ( 1 - coalesce ( s.null_frac, 0 ) )
-                                    * coalesce ( s.avg_width, 1024 ) ) AS tpl_data_size,
+                                sum ( ( 1 - coalesce ( s.null_frac, 0 ) )
+                                        * coalesce ( s.avg_width, 1024 ) ) AS tpl_data_size,
                                 bool_or ( att.atttypid = 'pg_catalog.name'::regtype ) AS is_na
                             FROM pg_attribute AS att
                             JOIN pg_class AS tbl
@@ -111,3 +110,4 @@ SELECT current_database (),
         ) AS s3 ;
 -- WHERE NOT is_na
 -- AND tblpages*((pst).free_percent + (pst).dead_tuple_percent)::float4/100 >= 1
+
