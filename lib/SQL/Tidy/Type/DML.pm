@@ -414,11 +414,22 @@ TODO: possibly a multi-pass approach:
 
         }
         elsif ( $token eq ',' ) {
-            if ( 0 == $parens ) {
-                $line_after = 1;
-            }
-            elsif ( $statement_type eq 'INSERT' and 1 == $parens ) {
-                $line_after = 1;
+            if ( 0 == $parens or ( $statement_type eq 'INSERT' and 1 == $parens ) ) {
+
+                if ( $idx < $#tokens and $tokens[ $idx + 1 ] =~ m/^~~comment_/i ) {
+                    if ( $comments->{ lc $tokens[ $idx + 1 ] }{newline_before} ) {
+                        $line_after = 1;
+                    }
+                    elsif ( $comments->{ lc $tokens[ $idx + 1 ] }{newline_after} ) {
+                        $line_after = 0;    # let the comment get it
+                    }
+                    else {
+                        $line_after = 1;
+                    }
+                }
+                else {
+                    $line_after = 1;
+                }
             }
         }
         elsif ( $token =~ m/^~~comment_/i ) {
