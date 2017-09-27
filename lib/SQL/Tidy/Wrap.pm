@@ -257,56 +257,17 @@ sub wrap_line {
 
     foreach my $line (@start) {
 
-        my ( $pre, $fcn, $post ) = $self->extract_function( 'IN', @{$line} );
-        if ( $fcn and @{$fcn}[0] ) {
-
-            my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
-            my $line_length = $self->calc_line_length( $strings, $comments, @{$fcn} );
-            $indent_size += scalar grep { $_ eq '(' } @{$pre};
-            $indent_size -= scalar grep { $_ eq ')' } @{$pre};
-
-            if (    $line_length > $min_line_width
-                and $line_length + length($indent) >= $max_line_width )
+        my @lines = $self->wrap_in(
             {
-
-                while ( @{$fcn}[0] ne '(' ) {
-                    push @{$pre}, shift @{$fcn};
-                }
-                push @{$pre}, shift @{$fcn};
-                $indent_size++;
-
-                push @start2, $pre;
-
-                my @lines = $self->wrap_csv(
-                    {
-                        indent_size => $indent_size,
-                        base_indent => $base_indent,
-                        strings     => $strings,
-                        comments    => $comments,
-                        tokens      => $fcn,
-                    }
-                );
-
-                foreach my $idx ( 0 .. $#lines ) {
-                    if ( @{ $lines[$idx] }[0] eq ' ' ) {
-                        shift @{ $lines[$idx] };
-                    }
-                    if ( $idx == $#lines ) {
-                        if ( $post and defined @{$post}[0] ) {
-                            push @{ $lines[$idx] }, @{$post};
-                        }
-                    }
-
-                    push @start2, $lines[$idx];
-                }
+                indent_size => $indent_size,
+                base_indent => $base_indent,
+                strings     => $strings,
+                comments    => $comments,
+                tokens      => $line,
             }
-            else {
-                push @start2, $line;
-            }
-        }
-        else {
-            push @start2, $line;
-        }
+        );
+
+        push @start2, @lines;
     }
 
     foreach my $line (@start2) {
@@ -414,7 +375,18 @@ sub wrap_line {
                                         #$parens += scalar grep { $_ eq '(' } @{$line};
                                         #$parens -= scalar grep { $_ eq ')' } @{$line};
 
-                                        push @acc, $line;
+                                        my @lines = $self->wrap_in(
+                                            {
+                                                indent_size => $indent_size + $parens,
+                                                base_indent => $base_indent,
+                                                count_pre   => 1,
+                                                strings     => $strings,
+                                                comments    => $comments,
+                                                tokens      => $line,
+                                            }
+                                        );
+
+                                        push @acc, @lines;
                                     }
                                 }
                             }
@@ -458,6 +430,13 @@ sub wrap_ops {
     my $max_level   = $args->{max_level} || 0;
     my @tokens      = @{ $args->{tokens} };
     my %ops         = %{ $args->{ops} };
+    my @new_tokens;
+
+    if ( $level > 5 ) {
+        # warn "Bailing on wrap_ops due to excess level: " . join ('', @tokens) . "\n\n";
+        push @new_tokens, \@tokens;
+        return @new_tokens;
+    }
 
     my $base_offset = 0;
     my $base_indent = $args->{base_indent};
@@ -475,8 +454,6 @@ sub wrap_ops {
     my $line_length = $self->calc_line_length( $strings, $comments, @tokens ) - $base_offset;
     $indent_size += scalar grep { $_ eq '(' } @tokens;
     $indent_size -= scalar grep { $_ eq ')' } @tokens;
-
-    my @new_tokens;
 
     if (
         not(    $line_length > $min_line_width
@@ -601,6 +578,88 @@ sub wrap_csv {
             push @{ $new_tokens[$idx] }, $token;
         }
     }
+    return @new_tokens;
+}
+
+sub wrap_in {
+    my ( $self, $args ) = @_;
+
+    my $indent_size = ( defined $args->{indent_size} ) ? $args->{indent_size} : 1;
+    my $strings     = $args->{strings};
+    my $comments    = $args->{comments};
+    my @tokens      = @{ $args->{tokens} };
+
+    # Count the length prior to the IN for calulating whether to wrap
+    my $count_pre = $args->{count_pre} || 0;
+
+    my $base_indent = $args->{base_indent};
+    if ( not defined $base_indent ) {
+        if ( @tokens and $tokens[0] =~ $space_re ) {
+            $base_indent = $tokens[0];
+        }
+    }
+
+    #    my $indent = $indenter->add_indents( $base_indent, $indent_size );
+    #    my $line_length = $self->calc_line_length( $strings, $comments, @tokens ) - length($indent);
+
+    my $parens = 0;
+    my @new_tokens;
+
+    my ( $pre, $fcn, $post ) = $self->extract_function( 'IN', @tokens );
+    if ( $fcn and @{$fcn}[0] ) {
+
+        my $indent = $indenter->add_indents( $base_indent, $indent_size + $parens );
+        my $line_length = $self->calc_line_length( $strings, $comments, @{$fcn} );
+        if ($count_pre) {
+            $line_length += length($pre);
+        }
+
+        $indent_size += scalar grep { $_ eq '(' } @{$pre};
+        $indent_size -= scalar grep { $_ eq ')' } @{$pre};
+
+        if (    $line_length > $min_line_width
+            and $line_length + length($indent) >= $max_line_width )
+        {
+
+            while ( @{$fcn}[0] ne '(' ) {
+                push @{$pre}, shift @{$fcn};
+            }
+            push @{$pre}, shift @{$fcn};
+            $indent_size++;
+
+            push @new_tokens, $pre;
+
+            my @lines = $self->wrap_csv(
+                {
+                    indent_size => $indent_size,
+                    base_indent => $base_indent,
+                    strings     => $strings,
+                    comments    => $comments,
+                    tokens      => $fcn,
+                }
+            );
+
+            foreach my $idx ( 0 .. $#lines ) {
+                if ( @{ $lines[$idx] }[0] eq ' ' ) {
+                    shift @{ $lines[$idx] };
+                }
+                if ( $idx == $#lines ) {
+                    if ( $post and defined @{$post}[0] ) {
+                        push @{ $lines[$idx] }, @{$post};
+                    }
+                }
+
+                push @new_tokens, $lines[$idx];
+            }
+        }
+        else {
+            push @new_tokens, \@tokens;
+        }
+    }
+    else {
+        push @new_tokens, \@tokens;
+    }
+
     return @new_tokens;
 }
 
