@@ -100,11 +100,7 @@ sub tag {
 
         next unless ( defined $tokens[$idx] );
 
-        my $token      = uc $tokens[$idx];
-        my $last_token = '';
-        if ( $idx > 0 and defined $tokens[ $idx - 1 ] ) {
-            $last_token = uc $tokens[ $idx - 1 ];
-        }
+        my $token = uc $tokens[$idx];
 
         if ( $token eq '(' ) {
             $parens++;
@@ -132,15 +128,37 @@ sub tag {
         if ($pl_key) {
 
             # Very Oracle:
-            if ( $token eq '/' and $last_token eq ';' ) {
-                $pl_key   = '';
-                $ddl_type = '';
+            if ( $token eq '/' ) {
+                if ( $pl{$pl_key} ) {
+                    my $arysz = scalar @{ $pl{$pl_key} };
+                    foreach my $idx ( 1 .. $arysz ) {
+                        next if ( @{ $pl{$pl_key} }[ -$idx ] =~ m/^~~comment/ );
+                        next if ( @{ $pl{$pl_key} }[ -$idx ] =~ $space_re );
+                        next if ( @{ $pl{$pl_key} }[ -$idx ] eq "\n" );
+                        if ( @{ $pl{$pl_key} }[ -$idx ] eq ';' ) {
+                            $pl_key   = '';
+                            $ddl_type = '';
+                        }
+                        last;
+                    }
+                }
             }
             # PostgreSQL:
-            elsif ( $pl_terminator and $token eq $pl_terminator and $last_token eq ';' ) {
-                $pl_key        = '';
-                $ddl_type      = '';
-                $pl_terminator = undef;
+            elsif ( $pl_terminator and $token eq $pl_terminator ) {
+                if ( $pl{$pl_key} ) {
+                    my $arysz = scalar @{ $pl{$pl_key} };
+                    foreach my $idx ( 1 .. $arysz ) {
+                        next if ( @{ $pl{$pl_key} }[ -$idx ] =~ m/^~~comment/ );
+                        next if ( @{ $pl{$pl_key} }[ -$idx ] =~ $space_re );
+                        next if ( @{ $pl{$pl_key} }[ -$idx ] eq "\n" );
+                        if ( @{ $pl{$pl_key} }[ -$idx ] eq ';' ) {
+                            $pl_key        = '';
+                            $ddl_type      = '';
+                            $pl_terminator = undef;
+                        }
+                        last;
+                    }
+                }
             }
         }
         elsif ( $ddl_header and $ddl_type and $ddl_type ne 'TRIGGER' and $parens == 0 and $token =~ m/^(IS|AS)$/i ) {
@@ -686,7 +704,6 @@ sub add_indents {
                         else {
                             $proc_stack[$eb_depth] ||= '';
                         }
-
                     }
                     else {
                         # We're doing something wrong here... that or the
@@ -791,6 +808,7 @@ sub add_indents {
             pop @eb_stack;
             pop @proc_stack;
             $eb_depth--;
+            $eb_depth = 0 if ( $eb_depth < 0 );
             $in_exception = 0;
             if ($cases) {
                 $cases--;
@@ -810,6 +828,7 @@ sub add_indents {
                 pop @eb_stack;
                 pop @proc_stack;
                 $eb_depth--;
+                $eb_depth = 0 if ( $eb_depth < 0 );
             }
         }
         elsif ( $token eq 'IS' ) {
@@ -822,14 +841,14 @@ sub add_indents {
                 $in_proc_sig = 0;
             }
         }
-        elsif ( $token eq 'LOOP' ) {
-            if ( $next_token eq "\n" ) {
-                # TODO: or next token is a comment and the one after that is the "\n"
-                $eb_depth++;
-                $eb_stack[$eb_depth] = $token;
-                $proc_stack[$eb_depth] ||= '';
-            }
-        }
+        #        elsif ( $token eq 'LOOP' ) {
+        #            if ( $next_token eq "\n" ) {
+        #                # TODO: or next token is a comment and the one after that is the "\n"
+        #                $eb_depth++;
+        #                $eb_stack[$eb_depth] = $token;
+        #                $proc_stack[$eb_depth] ||= '';
+        #            }
+        #        }
     }
 
     return $self->post_add_indents(@new_tokens);
