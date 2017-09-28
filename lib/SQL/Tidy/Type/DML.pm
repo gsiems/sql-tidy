@@ -259,6 +259,13 @@ sub untag {
             else {
                 # No indentation changes needed
                 push @new_tokens, @ary;
+                $indent = '';
+            }
+
+            # Ensure that end-of-line comments do not also comment the
+            # closing semicolon.
+            if ( $ary[-1] =~ m/^~~comment/ ) {
+                push @new_tokens, "\n", $indent;
             }
         }
         else {
