@@ -256,9 +256,12 @@ sub untag {
                     push @new_tokens, $dml_tok;
                 }
             }
-            else {
-                # No indentation changes needed
+            elsif ( $indent eq "\n" ) {
                 push @new_tokens, @ary;
+                $indent = '';
+            }
+            else {
+                push @new_tokens, "\n", @ary;
                 $indent = '';
             }
 
