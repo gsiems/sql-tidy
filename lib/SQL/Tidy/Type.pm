@@ -120,15 +120,17 @@ sub _unquote_identifiers {
     if ( $case_folding eq 'upper' or $case_folding eq 'lower' ) {
 
         foreach my $token (@tokens) {
-            if ( $token =~ m/^"[A-Za-z0-9_\#\$]+"$/ ) {
-
+            if ( $token =~ m/^".+"$/ ) {
                 # Something quoted this way comes...
-                my $tmp = $token;
-                $tmp =~ s/^"//;
-                $tmp =~ s/"$//;
+                if ( $token =~ m/^"[A-Za-z0-9_\#\$]+"$/ ) {
 
-                if ( not exists $keywords->{ uc $tmp } ) {
-                    $token = lc $tmp;
+                    my $tmp = $token;
+                    $tmp =~ s/^"//;
+                    $tmp =~ s/"$//;
+
+                    if ( not exists $keywords->{ uc $tmp } ) {
+                        $token = lc $tmp;
+                    }
                 }
             }
             elsif ( not exists $keywords->{ uc $token } ) {
